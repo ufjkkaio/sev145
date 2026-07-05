@@ -467,12 +467,6 @@
 
   function renderBoard() {
     state.metrics = computeMetrics();
-    const { step, gap } = m();
-    const whiteboard = document.querySelector('.whiteboard');
-    if (whiteboard) {
-      whiteboard.style.backgroundSize = `${step}px ${step}px`;
-      whiteboard.style.backgroundPosition = `${PAD}px ${PAD}px`;
-    }
 
     const root = els.boardCanvas;
     root.innerHTML = '';

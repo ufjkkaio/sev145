@@ -73,11 +73,6 @@
   padding: 10px;
   box-sizing: border-box;
   background-color: #fafbfc;
-  background-image:
-    linear-gradient(#e3e7eb 1px, transparent 1px),
-    linear-gradient(90deg, #e3e7eb 1px, transparent 1px);
-  background-size: 66px 66px;
-  background-position: 10px 10px;
 }
 
 .whiteboard__canvas {
