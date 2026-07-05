@@ -106,6 +106,7 @@
 
   async function init() {
     registerServiceWorker();
+    showBuildVersion();
     bindEvents();
     state.board = await DB.getBoardLayout();
     state.view = await DB.getBoardView();
@@ -122,6 +123,13 @@
       els.storeSetupDialog.hidden = false;
       els.storeNameInput.focus();
     }
+  }
+
+  function showBuildVersion() {
+    const script = document.querySelector('script[src*="app.js"]');
+    const v = script && new URL(script.src, location.href).searchParams.get('v');
+    const el = document.getElementById('app-version');
+    if (el && v) el.textContent = `v${v}`;
   }
 
   function registerServiceWorker() {
