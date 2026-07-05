@@ -85,27 +85,26 @@
       </div>
     </div>
 
-    <div id="photographer-dialog" class="dialog-overlay" hidden>
-      <div class="dialog" role="dialog">
-        <h3 class="dialog__title">撮影者</h3>
-        <p class="dialog__message">シフトと名前を入力してください（例：夜勤 山田）</p>
-        <input type="text" id="photographer-input" class="dialog__input" placeholder="例：夜勤 山田" maxlength="10" autocomplete="off">
-        <div class="dialog__actions">
-          <button type="button" id="btn-photographer-skip" class="btn btn--ghost">スキップ</button>
-          <button type="button" id="btn-photographer-ok" class="btn btn--primary">保存</button>
+    <div id="photo-viewer" class="photo-viewer" hidden>
+      <div class="photo-viewer__inner">
+        <button type="button" id="btn-viewer-close" class="photo-viewer__close" aria-label="閉じる">×</button>
+        <img id="viewer-image" class="photo-viewer__image" alt="">
+        <div class="photo-viewer__meta">
+          <label class="photo-viewer__label" for="viewer-author-input">撮影者</label>
+          <input type="text" id="viewer-author-input" class="photo-viewer__author-input" placeholder="例：夜勤 山田" maxlength="10" autocomplete="off" enterkeyhint="done">
+          <button type="button" id="btn-viewer-save-author" class="btn btn--primary photo-viewer__save-btn">名前を保存</button>
+        </div>
+        <div class="photo-viewer__actions">
+          <button type="button" id="btn-viewer-delete" class="btn btn--danger photo-viewer__delete-btn">この写真を削除</button>
+        </div>
+        <div id="photo-delete-confirm" class="photo-viewer__confirm" hidden>
+          <p class="photo-viewer__confirm-text">この写真を削除しますか？</p>
+          <div class="photo-viewer__confirm-actions">
+            <button type="button" id="btn-viewer-delete-cancel" class="btn btn--ghost photo-viewer__confirm-btn">キャンセル</button>
+            <button type="button" id="btn-viewer-delete-ok" class="btn btn--danger photo-viewer__confirm-btn">削除する</button>
+          </div>
         </div>
       </div>
-    </div>
-
-    <div id="photo-viewer" class="photo-viewer" hidden>
-      <button type="button" id="btn-viewer-close" class="photo-viewer__close" aria-label="閉じる">×</button>
-      <img id="viewer-image" class="photo-viewer__image" alt="">
-      <div class="photo-viewer__meta">
-        <label class="photo-viewer__label" for="viewer-author-input">撮影者</label>
-        <input type="text" id="viewer-author-input" class="photo-viewer__author-input" placeholder="例：夜勤 山田" maxlength="10" autocomplete="off">
-        <button type="button" id="btn-viewer-save-author" class="btn btn--primary btn--sm">名前を保存</button>
-      </div>
-      <button type="button" id="btn-viewer-delete" class="btn btn--danger photo-viewer__delete">この写真を削除</button>
     </div>
   </div>
 

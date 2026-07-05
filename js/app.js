@@ -30,12 +30,11 @@
     viewerImage: $('#viewer-image'),
     btnViewerClose: $('#btn-viewer-close'),
     btnViewerDelete: $('#btn-viewer-delete'),
-    photographerDialog: $('#photographer-dialog'),
-    photographerInput: $('#photographer-input'),
-    btnPhotographerSkip: $('#btn-photographer-skip'),
-    btnPhotographerOk: $('#btn-photographer-ok'),
     viewerAuthorInput: $('#viewer-author-input'),
     btnViewerSaveAuthor: $('#btn-viewer-save-author'),
+    photoDeleteConfirm: $('#photo-delete-confirm'),
+    btnViewerDeleteCancel: $('#btn-viewer-delete-cancel'),
+    btnViewerDeleteOk: $('#btn-viewer-delete-ok'),
   };
 
   let state = {
@@ -44,9 +43,9 @@
     photoCounts: {},
     currentShelfId: null,
     photoObjectUrls: [],
+    viewerBlobUrl: null,
     nameDialogCallback: null,
     viewingPhotoId: null,
-    pendingPhotoId: null,
   };
 
   async function init() {
@@ -112,13 +111,16 @@
     els.btnResetOk.addEventListener('click', handleReset);
 
     els.btnViewerClose.addEventListener('click', closePhotoViewer);
-    els.btnViewerDelete.addEventListener('click', handleDeletePhoto);
-    els.btnPhotographerSkip.addEventListener('click', () => closePhotographerDialog(true));
-    els.btnPhotographerOk.addEventListener('click', () => closePhotographerDialog(false));
-    els.photographerInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') closePhotographerDialog(false);
-    });
+    els.btnViewerDelete.addEventListener('click', showDeleteConfirm);
+    els.btnViewerDeleteCancel.addEventListener('click', hideDeleteConfirm);
+    els.btnViewerDeleteOk.addEventListener('click', handleDeletePhoto);
     els.btnViewerSaveAuthor.addEventListener('click', handleSaveViewerAuthor);
+    els.viewerAuthorInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSaveViewerAuthor();
+      }
+    });
   }
 
   function toggleEditMode() {
@@ -352,14 +354,27 @@
           <span class="photo-item__time">${timeStr}</span>
         </div>
       `;
-      item.addEventListener('click', () => openPhotoViewer(photo.id, url));
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openPhotoViewer(photo.id);
+      });
       els.photoGrid.appendChild(item);
     }
   }
 
   function revokePhotoUrls() {
-    state.photoObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+    state.photoObjectUrls.forEach((url) => {
+      if (url !== state.viewerBlobUrl) URL.revokeObjectURL(url);
+    });
     state.photoObjectUrls = [];
+  }
+
+  function revokeViewerUrl() {
+    if (state.viewerBlobUrl) {
+      URL.revokeObjectURL(state.viewerBlobUrl);
+      state.viewerBlobUrl = null;
+    }
   }
 
   async function handleCheckChange() {
@@ -378,42 +393,42 @@
     state.photoCounts = await DB.getPhotoCounts();
     updateShelfCells();
     await renderPhotos(state.currentShelfId);
-    openPhotographerDialog(photoId);
+    await openPhotoViewer(photoId);
   }
 
-  function openPhotographerDialog(photoId) {
-    state.pendingPhotoId = photoId;
-    const last = localStorage.getItem(LAST_AUTHOR_KEY) || '';
-    els.photographerInput.value = last;
-    els.photographerDialog.hidden = false;
-    setTimeout(() => {
-      els.photographerInput.focus();
-      els.photographerInput.select();
-    }, 100);
+  async function openPhotoViewer(photoId) {
+    const photo = await DB.getPhoto(photoId);
+    if (!photo) return;
+
+    revokeViewerUrl();
+    state.viewingPhotoId = photoId;
+    state.viewerBlobUrl = URL.createObjectURL(photo.blob);
+    els.viewerImage.src = state.viewerBlobUrl;
+    els.viewerAuthorInput.value = photo.author || '';
+    hideDeleteConfirm();
+    els.photoViewer.hidden = false;
+
+    const last = localStorage.getItem(LAST_AUTHOR_KEY);
+    els.viewerAuthorInput.placeholder = last ? `例：${last}` : '例：夜勤 山田';
+
+    requestAnimationFrame(() => {
+      if (!photo.author) els.viewerAuthorInput.focus();
+    });
   }
 
-  async function closePhotographerDialog(skip) {
-    const photoId = state.pendingPhotoId;
-    state.pendingPhotoId = null;
-    els.photographerDialog.hidden = true;
+  function closePhotoViewer() {
+    els.photoViewer.hidden = true;
+    hideDeleteConfirm();
+    state.viewingPhotoId = null;
+    revokeViewerUrl();
+  }
 
-    if (!photoId) return;
+  function showDeleteConfirm() {
+    els.photoDeleteConfirm.hidden = false;
+  }
 
-    if (!skip) {
-      const author = els.photographerInput.value.trim().slice(0, PHOTO_AUTHOR_MAX);
-      if (author) {
-        const photo = await DB.getPhoto(photoId);
-        if (photo) {
-          photo.author = author;
-          await DB.updatePhoto(photo);
-          localStorage.setItem(LAST_AUTHOR_KEY, author);
-        }
-      }
-    }
-
-    if (state.currentShelfId) {
-      await renderPhotos(state.currentShelfId);
-    }
+  function hideDeleteConfirm() {
+    els.photoDeleteConfirm.hidden = true;
   }
 
   function handleRenameShelf() {
@@ -429,19 +444,6 @@
     });
   }
 
-  async function openPhotoViewer(photoId, url) {
-    state.viewingPhotoId = photoId;
-    els.viewerImage.src = url;
-    const photo = await DB.getPhoto(photoId);
-    els.viewerAuthorInput.value = photo?.author || '';
-    els.photoViewer.hidden = false;
-  }
-
-  function closePhotoViewer() {
-    els.photoViewer.hidden = true;
-    state.viewingPhotoId = null;
-  }
-
   async function handleSaveViewerAuthor() {
     if (!state.viewingPhotoId) return;
     const photo = await DB.getPhoto(state.viewingPhotoId);
@@ -450,6 +452,7 @@
     photo.author = author;
     await DB.updatePhoto(photo);
     if (author) localStorage.setItem(LAST_AUTHOR_KEY, author);
+    els.viewerAuthorInput.blur();
     if (state.currentShelfId) {
       await renderPhotos(state.currentShelfId);
     }
@@ -457,7 +460,6 @@
 
   async function handleDeletePhoto() {
     if (!state.viewingPhotoId) return;
-    if (!window.confirm('この写真を削除しますか？')) return;
     await DB.deletePhoto(state.viewingPhotoId);
     closePhotoViewer();
     if (state.currentShelfId) {
