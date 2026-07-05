@@ -57,7 +57,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=20').catch(() => {});
     }
   }
 
@@ -389,12 +389,28 @@
   }
 
   function closePhotoViewer() {
+    els.viewerAuthorInput.blur();
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     els.photoViewer.hidden = true;
+    els.photoViewer.setAttribute('hidden', '');
+    els.photoViewer.setAttribute('aria-hidden', 'true');
+    els.photoViewer.classList.add('photo-viewer--closed');
     hideDeleteConfirm();
     state.viewingPhotoId = null;
     els.viewerImage.removeAttribute('src');
     els.viewerAuthorInput.value = '';
     els.viewerAuthorInput.readOnly = false;
+    document.body.classList.remove('photo-viewer-open');
+  }
+
+  function openPhotoViewerElement() {
+    els.photoViewer.classList.remove('photo-viewer--closed');
+    els.photoViewer.removeAttribute('hidden');
+    els.photoViewer.hidden = false;
+    els.photoViewer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('photo-viewer-open');
   }
 
   function showDeleteConfirm() {
@@ -431,7 +447,7 @@
     state.viewingPhotoId = photoId;
     els.viewerImage.src = getPhotoObjectUrl(photoId, photo.blob);
     hideDeleteConfirm();
-    els.photoViewer.hidden = false;
+    openPhotoViewerElement();
 
     const last = localStorage.getItem(LAST_AUTHOR_KEY);
     const author = photo.author || '';
@@ -469,6 +485,7 @@
     if (!state.viewingPhotoId) return;
     const photo = await DB.getPhoto(state.viewingPhotoId);
     if (!photo) return;
+
     const author = els.viewerAuthorInput.value.trim().slice(0, PHOTO_AUTHOR_MAX);
     photo.author = author;
     await DB.updatePhoto(photo);
@@ -476,9 +493,10 @@
 
     const shelfId = state.currentShelfId;
     closePhotoViewer();
-    if (shelfId) {
-      await renderPhotos(shelfId);
-    }
+
+    requestAnimationFrame(() => {
+      if (shelfId) renderPhotos(shelfId);
+    });
   }
 
   async function handleDeletePhoto() {

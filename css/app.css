@@ -728,9 +728,15 @@ body {
   touch-action: manipulation;
 }
 
-.photo-viewer[hidden] {
+.photo-viewer[hidden],
+.photo-viewer.photo-viewer--closed {
   display: none !important;
-  pointer-events: none;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.photo-viewer-open {
+  overflow: hidden;
 }
 
 .photo-viewer__inner {
