@@ -10,8 +10,8 @@
   const GAP = 4;
   const PAD = 10;
   const VISIBLE_COLS = 5;
-  const BOARD_WIDTH_PX = 1000;
-  const BOARD_HEIGHT_PX = 1000;
+  const BOARD_WIDTH_PX = 10000;
+  const BOARD_HEIGHT_PX = 10000;
   const MAX_CELL = 62;
   const MIN_CELL = 50;
   const TAP_THRESHOLD = 8;
