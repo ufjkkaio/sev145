@@ -4,6 +4,7 @@
   const $ = (sel) => document.querySelector(sel);
 
   const PHOTO_AUTHOR_MAX = 10;
+  const PHOTO_AUTHOR_PLACEHOLDER = 'シフト　名前';
   const LAST_AUTHOR_KEY = 'lastPhotographer';
 
   const els = {
@@ -57,7 +58,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=20').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=21').catch(() => {});
     }
   }
 
@@ -449,11 +450,10 @@
     hideDeleteConfirm();
     openPhotoViewerElement();
 
-    const last = localStorage.getItem(LAST_AUTHOR_KEY);
-    const author = photo.author || '';
     els.viewerAuthorInput.value = '';
-    els.viewerAuthorInput.placeholder = last ? `例：${last}` : '例：夜勤 山田';
+    els.viewerAuthorInput.placeholder = PHOTO_AUTHOR_PLACEHOLDER;
 
+    const author = photo.author || '';
     if (author) {
       els.viewerAuthorInput.readOnly = false;
       els.viewerAuthorInput.value = author;
