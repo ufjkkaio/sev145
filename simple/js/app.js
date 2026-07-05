@@ -10,6 +10,8 @@
   const GAP = 4;
   const PAD = 10;
   const VISIBLE_COLS = 5;
+  const BOARD_ZOOM_FLOOR = 0.5;
+  const BOARD_MIN_ROWS = 8;
   const MAX_CELL = 62;
   const MIN_CELL = 50;
   const TAP_THRESHOLD = 8;
@@ -451,28 +453,44 @@
     };
   }
 
-  function boardSize() {
+  function boardGridDimensions() {
+    const mapW = els.mapArea?.clientWidth || window.innerWidth;
+    const mapH = els.mapArea?.clientHeight || window.innerHeight;
     const { step, pad } = m();
-    let maxX = VISIBLE_COLS;
-    let maxY = 5;
+    let cols = Math.ceil((mapW / BOARD_ZOOM_FLOOR - pad * 2) / step);
+    let rows = Math.ceil((mapH / BOARD_ZOOM_FLOOR - pad * 2) / step);
     for (const b of state.board.blocks) {
-      maxX = Math.max(maxX, b.x + b.w + 1);
-      maxY = Math.max(maxY, b.y + b.h + 1);
+      cols = Math.max(cols, b.x + b.w + 1);
+      rows = Math.max(rows, b.y + b.h + 1);
     }
     return {
-      width: pad * 2 + maxX * step,
-      height: pad * 2 + maxY * step,
+      cols: Math.max(VISIBLE_COLS, cols),
+      rows: Math.max(BOARD_MIN_ROWS, rows),
+    };
+  }
+
+  function boardSize() {
+    const { step, pad } = m();
+    const { cols, rows } = boardGridDimensions();
+    return {
+      width: pad * 2 + cols * step,
+      height: pad * 2 + rows * step,
+      cols,
+      rows,
     };
   }
 
   function renderBoard() {
     state.metrics = computeMetrics();
+    const { step, pad } = m();
 
     const root = els.boardCanvas;
     root.innerHTML = '';
     const size = boardSize();
     root.style.width = `${size.width}px`;
     root.style.height = `${size.height}px`;
+    root.style.backgroundSize = `${step}px ${step}px`;
+    root.style.backgroundPosition = `${pad}px ${pad}px`;
 
     if (state.board.blocks.length === 0) {
       const empty = document.createElement('p');
@@ -749,8 +767,9 @@
   }
 
   function findEmptyCell(w = 1, h = 1) {
-    for (let y = 0; y < 30; y++) {
-      for (let x = 0; x < 12; x++) {
+    const { cols, rows } = boardGridDimensions();
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
         const probe = { slotKey: '__probe__', x, y, w, h };
         if (canPlace(probe, x, y)) return { x, y };
       }
