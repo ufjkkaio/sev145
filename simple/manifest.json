@@ -1,0 +1,26 @@
+{
+  "name": "棚清掃（グリッド）",
+  "short_name": "棚清掃",
+  "description": "正方形グリッドで棚の清掃状況を管理",
+  "id": "/simple/",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f0f4f0",
+  "theme_color": "#1a5f2a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "../icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "../icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

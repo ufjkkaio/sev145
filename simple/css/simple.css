@@ -1,0 +1,63 @@
+/* 正方形グリッド用の追加スタイル（共通UIは ../css/app.css） */
+
+.grid-layout {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  grid-template-columns: repeat(var(--cols, 4), 1fr);
+}
+
+.grid-layout .shelf-cell {
+  aspect-ratio: 1;
+  min-height: 72px;
+}
+
+.grid-layout .shelf-cell__label {
+  font-size: 0.95rem;
+}
+
+.btn-add-shelf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  border: 2px dashed var(--color-border, #ccc);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--color-primary, #1a5f2a);
+  font-size: 2rem;
+  cursor: pointer;
+}
+
+.layout-edit-mode .shelf-cell {
+  outline: 2px dashed rgba(26, 95, 42, 0.35);
+}
+
+.header__store-name {
+  font-size: 0.85rem;
+  color: var(--color-muted, #666);
+  margin: 0;
+}
+
+.header__lead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.header__lead .header__title {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.header__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.header__actions .btn {
+  font-size: 0.8rem;
+  padding: 6px 10px;
+}

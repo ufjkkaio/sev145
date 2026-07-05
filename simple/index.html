@@ -8,30 +8,33 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="棚清掃">
   <meta name="theme-color" content="#1a5f2a">
-  <title>店内棚 清掃管理</title>
+  <title>棚清掃</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/app.css?v=29">
+  <link rel="apple-touch-icon" href="../icons/icon-192.png">
+  <link rel="stylesheet" href="../css/app.css?v=29">
+  <link rel="stylesheet" href="css/simple.css?v=1">
 </head>
 <body>
   <div id="app">
     <header class="header">
-      <h1 class="header__title">店内棚 清掃管理</h1>
+      <div class="header__lead">
+        <p id="header-store-name" class="header__store-name">店舗名</p>
+        <h1 class="header__title">棚清掃</h1>
+      </div>
       <div class="header__actions">
+        <button type="button" id="btn-layout-edit" class="btn btn--ghost" aria-pressed="false">レイアウト</button>
         <button type="button" id="btn-edit-mode" class="btn btn--ghost" aria-pressed="false">名称編集</button>
         <button type="button" id="btn-reset" class="btn btn--header-reset">リセット</button>
       </div>
     </header>
 
     <main class="map-area" id="map-area">
-      <div id="store-layout" class="store-layout"></div>
+      <div id="grid-layout" class="grid-layout"></div>
     </main>
 
-    <div id="edit-hint" class="edit-hint" hidden>
-      棚をタップして名称を変更
-    </div>
+    <div id="edit-hint" class="edit-hint" hidden>棚をタップして名称を変更</div>
+    <div id="layout-hint" class="edit-hint" hidden>タップで削除、＋で棚を追加</div>
 
-    <!-- 棚フォルダビュー -->
     <div id="folder-overlay" class="folder-overlay" hidden>
       <div class="folder" role="dialog" aria-labelledby="folder-title">
         <div class="folder__header">
@@ -41,7 +44,6 @@
           </div>
           <button type="button" id="btn-rename-shelf" class="btn btn--ghost btn--sm">名称変更</button>
         </div>
-
         <div class="folder__status">
           <label class="check-complete">
             <input type="checkbox" id="shelf-checked">
@@ -49,7 +51,6 @@
             <span class="check-complete__label">清掃完了</span>
           </label>
         </div>
-
         <div class="folder__content">
           <div id="photo-grid" class="photo-grid"></div>
           <div class="photo-add-row">
@@ -83,6 +84,17 @@
       </div>
     </div>
 
+    <div id="delete-shelf-dialog" class="dialog-overlay" hidden>
+      <div class="dialog" role="dialog">
+        <h3 class="dialog__title">この棚を削除しますか？</h3>
+        <p class="dialog__message">棚の写真もすべて削除されます。</p>
+        <div class="dialog__actions">
+          <button type="button" id="btn-delete-shelf-cancel" class="btn btn--ghost">キャンセル</button>
+          <button type="button" id="btn-delete-shelf-ok" class="btn btn--danger">削除</button>
+        </div>
+      </div>
+    </div>
+
     <div id="reset-dialog" class="dialog-overlay" hidden>
       <div class="dialog" role="dialog">
         <h3 class="dialog__title">すべてリセットしますか？</h3>
@@ -94,13 +106,23 @@
       </div>
     </div>
 
+    <div id="store-setup-dialog" class="dialog-overlay" hidden>
+      <div class="dialog" role="dialog">
+        <h3 class="dialog__title">店舗名を入力</h3>
+        <input type="text" id="store-name-input" class="dialog__input" placeholder="例：123号店" maxlength="20" autocomplete="off">
+        <div class="dialog__actions">
+          <button type="button" id="btn-store-setup-ok" class="btn btn--primary">はじめる</button>
+        </div>
+      </div>
+    </div>
+
     <div id="photo-viewer" class="photo-viewer" hidden>
       <div class="photo-viewer__inner">
         <button type="button" id="btn-viewer-close" class="photo-viewer__close" aria-label="閉じる">×</button>
         <img id="viewer-image" class="photo-viewer__image" alt="">
         <div class="photo-viewer__meta">
           <label class="photo-viewer__label" for="viewer-author-input">撮影者</label>
-          <input type="text" id="viewer-author-input" class="photo-viewer__author-input" name="shelf-photo-author" placeholder="シフト　名前" maxlength="10" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+          <input type="text" id="viewer-author-input" class="photo-viewer__author-input" placeholder="シフト　名前" maxlength="10" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
           <button type="button" id="btn-viewer-save-author" class="btn btn--primary photo-viewer__save-btn">名前を保存</button>
         </div>
         <div class="photo-viewer__actions">
@@ -117,7 +139,6 @@
       </div>
     </div>
 
-    <!-- 写真編集（ペンのみ） -->
     <div id="photo-editor" class="photo-editor" hidden>
       <div class="photo-editor__bar">
         <button type="button" id="btn-editor-back" class="btn btn--ghost btn--sm">戻る</button>
@@ -130,8 +151,7 @@
     </div>
   </div>
 
-  <script src="js/layout-template.js?v=29"></script>
-  <script src="js/db.js?v=29"></script>
-  <script src="js/app.js?v=29"></script>
+  <script src="js/db.js?v=1"></script>
+  <script src="js/app.js?v=1"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 /**
- * 店内レイアウト定義（店舗ごとに layoutKey で切り替え）
+ * 145号店 店内レイアウト定義
  */
-const LAYOUT_STANDARD = {
+const LAYOUT_TEMPLATE = {
   version: 5,
   peripheral: [
     { slotKey: 'chilled', defaultName: 'チルド', zone: 'entrance' },
@@ -83,26 +83,14 @@ const LAYOUT_STANDARD = {
   ],
 };
 
-const LAYOUT_REGISTRY = {
-  standard: LAYOUT_STANDARD,
-};
-
-/** @deprecated 互換用。getLayoutForStore を使ってください */
-const LAYOUT_TEMPLATE = LAYOUT_STANDARD;
-
-function getLayoutForStore(storeId) {
-  const store = getStoreById(storeId);
-  return LAYOUT_REGISTRY[store.layoutKey] || LAYOUT_STANDARD;
-}
-
-function getAllSlotsFromLayout(layout) {
+function getAllSlots() {
   const slots = [];
 
-  for (const p of layout.peripheral) {
+  for (const p of LAYOUT_TEMPLATE.peripheral) {
     slots.push({ slotKey: p.slotKey, defaultName: p.defaultName, zone: p.zone });
   }
 
-  for (const row of layout.rows) {
+  for (const row of LAYOUT_TEMPLATE.rows) {
     for (const cell of row.cells) {
       slots.push({
         slotKey: cell.slotKey,
@@ -116,18 +104,5 @@ function getAllSlotsFromLayout(layout) {
   return slots;
 }
 
-function getAllSlotsForStore(storeId) {
-  return getAllSlotsFromLayout(getLayoutForStore(storeId));
-}
-
-function getAllSlots() {
-  return getAllSlotsForStore('default');
-}
-
-window.LAYOUT_STANDARD = LAYOUT_STANDARD;
-window.LAYOUT_REGISTRY = LAYOUT_REGISTRY;
 window.LAYOUT_TEMPLATE = LAYOUT_TEMPLATE;
-window.getLayoutForStore = getLayoutForStore;
-window.getAllSlotsFromLayout = getAllSlotsFromLayout;
-window.getAllSlotsForStore = getAllSlotsForStore;
 window.getAllSlots = getAllSlots;

@@ -15,7 +15,7 @@ NEXT=$((CURRENT + 1))
 echo "キャッシュ v${CURRENT} → v${NEXT} に更新..."
 
 perl -pi -e "s/shelf-cleaning-v${CURRENT}/shelf-cleaning-v${NEXT}/g" sw.js
-perl -pi -e "s/\\?v=${CURRENT}/?v=${NEXT}/g" sw.js index.html js/app.js
+perl -pi -e "s/\\?v=${CURRENT}/?v=${NEXT}/g" sw.js index.html js/app.js simple/sw.js simple/index.html simple/js/app.js 2>/dev/null || perl -pi -e "s/\\?v=${CURRENT}/?v=${NEXT}/g" sw.js index.html js/app.js
 
 git add -A
 

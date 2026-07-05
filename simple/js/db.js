@@ -1,6 +1,7 @@
-const DB_NAME = 'shelf-cleaning-app';
-const DB_VERSION = 2;
-const STORE_ID = 'default';
+const DB_NAME = 'shelf-cleaning-grid';
+const DB_VERSION = 1;
+const DEFAULT_COLS = 4;
+const DEFAULT_BLOCK_COUNT = 12;
 
 let db = null;
 
@@ -14,19 +15,12 @@ function openDB() {
 
     request.onupgradeneeded = (e) => {
       const database = e.target.result;
-
       if (!database.objectStoreNames.contains('config')) {
         database.createObjectStore('config', { keyPath: 'key' });
       }
       if (!database.objectStoreNames.contains('shelves')) {
         const shelfStore = database.createObjectStore('shelves', { keyPath: 'id', autoIncrement: true });
-        shelfStore.createIndex('storeId', 'storeId', { unique: false });
         shelfStore.createIndex('slotKey', 'slotKey', { unique: false });
-      } else if (e.oldVersion < 2) {
-        const shelfStore = e.target.transaction.objectStore('shelves');
-        if (!shelfStore.indexNames.contains('slotKey')) {
-          shelfStore.createIndex('slotKey', 'slotKey', { unique: false });
-        }
       }
       if (!database.objectStoreNames.contains('photos')) {
         const photoStore = database.createObjectStore('photos', { keyPath: 'id', autoIncrement: true });
@@ -66,10 +60,38 @@ async function setConfig(key, value) {
   return promisifyRequest(store.put({ key, value }));
 }
 
+function createDefaultGrid() {
+  return {
+    version: 1,
+    cols: DEFAULT_COLS,
+    blocks: Array.from({ length: DEFAULT_BLOCK_COUNT }, (_, i) => ({
+      slotKey: `g-${i + 1}`,
+      defaultName: String(i + 1),
+    })),
+  };
+}
+
+async function getGridLayout() {
+  const row = await getConfig('gridLayout');
+  return row ? row.value : createDefaultGrid();
+}
+
+async function setGridLayout(layout) {
+  return setConfig('gridLayout', layout);
+}
+
+async function getStoreName() {
+  const row = await getConfig('storeName');
+  return row ? row.value : '';
+}
+
+async function setStoreName(name) {
+  return setConfig('storeName', name);
+}
+
 async function getAllShelves() {
   const store = await tx('shelves');
-  const all = await promisifyRequest(store.getAll());
-  return all.filter((s) => s.storeId === STORE_ID);
+  return promisifyRequest(store.getAll());
 }
 
 async function getShelf(id) {
@@ -77,9 +99,16 @@ async function getShelf(id) {
   return promisifyRequest(store.get(id));
 }
 
+async function getShelfBySlotKey(slotKey) {
+  const store = await tx('shelves');
+  const index = store.index('slotKey');
+  const all = await promisifyRequest(index.getAll(slotKey));
+  return all[0] || null;
+}
+
 async function addShelf(data) {
   const store = await tx('shelves', 'readwrite');
-  return promisifyRequest(store.add({ ...data, storeId: STORE_ID, checked: false }));
+  return promisifyRequest(store.add({ ...data, checked: false }));
 }
 
 async function updateShelf(shelf) {
@@ -128,61 +157,42 @@ async function getPhoto(id) {
   return promisifyRequest(store.get(id));
 }
 
-async function getShelfBySlotKey(slotKey) {
-  const store = await tx('shelves');
-  const index = store.index('slotKey');
-  const all = await promisifyRequest(index.getAll(slotKey));
-  return all.find((s) => s.storeId === STORE_ID) || null;
-}
-
-async function seedShelvesFromTemplate() {
+async function syncShelvesFromGrid(grid) {
   const existing = await getAllShelves();
-  if (existing.length > 0) return;
+  const slotKeys = new Set(grid.blocks.map((b) => b.slotKey));
 
-  const slots = getAllSlots();
-  const store = await tx('shelves', 'readwrite');
-  for (const slot of slots) {
-    await promisifyRequest(store.add({
-      storeId: STORE_ID,
-      slotKey: slot.slotKey,
-      name: slot.defaultName,
-      checked: false,
-    }));
+  for (const shelf of existing) {
+    if (!slotKeys.has(shelf.slotKey)) {
+      await deleteShelf(shelf.id);
+    }
   }
-}
 
-async function getLayoutVersion() {
-  const row = await getConfig('layoutVersion');
-  if (row) return row.value;
-  const legacy = await getConfig('layoutVersion:default');
-  return legacy ? legacy.value : 0;
-}
-
-async function setLayoutVersion(version) {
-  return setConfig('layoutVersion', version);
+  for (const block of grid.blocks) {
+    const shelf = await getShelfBySlotKey(block.slotKey);
+    if (!shelf) {
+      await addShelf({
+        slotKey: block.slotKey,
+        name: block.defaultName,
+      });
+    }
+  }
 }
 
 async function resetAll() {
   const database = await openDB();
   const transaction = database.transaction(['shelves', 'photos'], 'readwrite');
-
   const shelfStore = transaction.objectStore('shelves');
   const photoStore = transaction.objectStore('photos');
 
   const shelves = await promisifyRequest(shelfStore.getAll());
   for (const shelf of shelves) {
-    if (shelf.storeId === STORE_ID) {
-      shelf.checked = false;
-      shelfStore.put(shelf);
-    }
+    shelf.checked = false;
+    shelfStore.put(shelf);
   }
 
   const photos = await promisifyRequest(photoStore.getAll());
   for (const photo of photos) {
-    const shelf = shelves.find((s) => s.id === photo.shelfId);
-    if (shelf && shelf.storeId === STORE_ID) {
-      photoStore.delete(photo.id);
-    }
+    photoStore.delete(photo.id);
   }
 
   return new Promise((resolve, reject) => {
@@ -216,7 +226,11 @@ async function getPhotoCounts() {
 }
 
 window.DB = {
-  STORE_ID,
+  DEFAULT_COLS,
+  getGridLayout,
+  setGridLayout,
+  getStoreName,
+  setStoreName,
   getAllShelves,
   getShelf,
   getShelfBySlotKey,
@@ -228,9 +242,7 @@ window.DB = {
   updatePhoto,
   deletePhoto,
   getPhoto,
+  syncShelvesFromGrid,
   resetAll,
   getPhotoCounts,
-  seedShelvesFromTemplate,
-  getLayoutVersion,
-  setLayoutVersion,
 };

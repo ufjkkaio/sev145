@@ -2,16 +2,19 @@
   'use strict';
 
   const $ = (sel) => document.querySelector(sel);
-
   const PHOTO_AUTHOR_MAX = 10;
   const PHOTO_AUTHOR_PLACEHOLDER = 'シフト　名前';
-  const LAST_AUTHOR_KEY = 'lastPhotographer';
+  const PEN_COLOR = '#e53935';
+  const PEN_SIZE = 6;
 
   const els = {
+    headerStoreName: $('#header-store-name'),
+    btnLayoutEdit: $('#btn-layout-edit'),
     btnEditMode: $('#btn-edit-mode'),
     btnReset: $('#btn-reset'),
-    storeLayout: $('#store-layout'),
+    gridLayout: $('#grid-layout'),
     editHint: $('#edit-hint'),
+    layoutHint: $('#layout-hint'),
     folderOverlay: $('#folder-overlay'),
     btnFolderBack: $('#btn-folder-back'),
     folderTitle: $('#folder-title'),
@@ -25,9 +28,15 @@
     shelfNameInput: $('#shelf-name-input'),
     btnNameCancel: $('#btn-name-cancel'),
     btnNameOk: $('#btn-name-ok'),
+    deleteShelfDialog: $('#delete-shelf-dialog'),
+    btnDeleteShelfCancel: $('#btn-delete-shelf-cancel'),
+    btnDeleteShelfOk: $('#btn-delete-shelf-ok'),
     resetDialog: $('#reset-dialog'),
     btnResetCancel: $('#btn-reset-cancel'),
     btnResetOk: $('#btn-reset-ok'),
+    storeSetupDialog: $('#store-setup-dialog'),
+    storeNameInput: $('#store-name-input'),
+    btnStoreSetupOk: $('#btn-store-setup-ok'),
     photoViewer: $('#photo-viewer'),
     viewerImage: $('#viewer-image'),
     btnViewerClose: $('#btn-viewer-close'),
@@ -38,7 +47,6 @@
     photoDeleteConfirm: $('#photo-delete-confirm'),
     btnViewerDeleteCancel: $('#btn-viewer-delete-cancel'),
     btnViewerDeleteOk: $('#btn-viewer-delete-ok'),
-
     photoEditor: $('#photo-editor'),
     btnEditorBack: $('#btn-editor-back'),
     btnEditorSave: $('#btn-editor-save'),
@@ -46,14 +54,16 @@
   };
 
   let state = {
+    grid: null,
     editMode: false,
+    layoutEditMode: false,
     shelfMap: {},
     photoCounts: {},
     currentShelfId: null,
     photoUrlById: {},
     viewingPhotoId: null,
     nameDialogCallback: null,
-
+    pendingDeleteSlotKey: null,
     editor: {
       open: false,
       isDrawing: false,
@@ -66,39 +76,23 @@
     },
   };
 
-  const PEN_COLOR = '#e53935';
-  const PEN_SIZE = 6;
-
-  function getActiveLayout() {
-    return LAYOUT_TEMPLATE;
-  }
-
   async function init() {
     registerServiceWorker();
     bindEvents();
-    await ensureShelves();
+    state.grid = await DB.getGridLayout();
+    await DB.syncShelvesFromGrid(state.grid);
+    updateHeader();
     await refresh();
-    renderStoreLayout();
+    renderGrid();
+    if (!(await DB.getStoreName())) {
+      els.storeSetupDialog.hidden = false;
+      els.storeNameInput.focus();
+    }
   }
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=29').catch(() => {});
-    }
-  }
-
-  async function ensureShelves() {
-    const layout = getActiveLayout();
-    const version = await DB.getLayoutVersion();
-    if (version !== layout.version) {
-      const shelves = await DB.getAllShelves();
-      for (const shelf of shelves) {
-        await DB.deleteShelf(shelf.id);
-      }
-      await DB.seedShelvesFromTemplate();
-      await DB.setLayoutVersion(layout.version);
-    } else {
-      await DB.seedShelvesFromTemplate();
+      navigator.serviceWorker.register('./sw.js?v=1').catch(() => {});
     }
   }
 
@@ -112,31 +106,42 @@
     updateShelfCells();
   }
 
-  function bindEvents() {
-    els.btnEditMode.addEventListener('click', toggleEditMode);
+  function updateHeader() {
+    DB.getStoreName().then((name) => {
+      const display = name || '店舗名未設定';
+      els.headerStoreName.textContent = display;
+      document.title = `${display} 棚清掃`;
+    });
+  }
 
+  function bindEvents() {
+    els.btnLayoutEdit.addEventListener('click', toggleLayoutEditMode);
+    els.btnEditMode.addEventListener('click', toggleEditMode);
     els.btnFolderBack.addEventListener('click', closeFolder);
     els.folderOverlay.addEventListener('click', (e) => {
       if (e.target === els.folderOverlay) closeFolder();
     });
-
     els.shelfChecked.addEventListener('change', handleCheckChange);
     els.photoInputCamera.addEventListener('change', handlePhotoUpload);
     els.photoInputAlbum.addEventListener('change', handlePhotoUpload);
     els.btnRenameShelf.addEventListener('click', handleRenameShelf);
-
     els.btnNameCancel.addEventListener('click', closeNameDialog);
     els.btnNameOk.addEventListener('click', confirmNameDialog);
     els.shelfNameInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') confirmNameDialog();
     });
-
-    els.btnReset.addEventListener('click', () => {
-      els.resetDialog.hidden = false;
+    els.btnDeleteShelfCancel.addEventListener('click', () => {
+      els.deleteShelfDialog.hidden = true;
+      state.pendingDeleteSlotKey = null;
     });
+    els.btnDeleteShelfOk.addEventListener('click', confirmDeleteShelf);
+    els.btnReset.addEventListener('click', () => { els.resetDialog.hidden = false; });
     els.btnResetCancel.addEventListener('click', () => { els.resetDialog.hidden = true; });
     els.btnResetOk.addEventListener('click', handleReset);
-
+    els.btnStoreSetupOk.addEventListener('click', handleStoreSetup);
+    els.storeNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleStoreSetup();
+    });
     els.btnViewerClose.addEventListener('click', closePhotoViewer);
     els.btnViewerDelete.addEventListener('click', showDeleteConfirm);
     els.btnViewerDeleteCancel.addEventListener('click', hideDeleteConfirm);
@@ -149,162 +154,129 @@
         handleSaveViewerAuthor();
       }
     });
-
     els.btnEditorBack.addEventListener('click', cancelPhotoEditor);
     els.btnEditorSave.addEventListener('click', savePhotoEdits);
-
     els.editorCanvas.addEventListener('pointerdown', onEditorPointerDown);
     els.editorCanvas.addEventListener('pointermove', onEditorPointerMove);
     els.editorCanvas.addEventListener('pointerup', onEditorPointerUp);
     els.editorCanvas.addEventListener('pointercancel', onEditorPointerUp);
   }
 
+  async function handleStoreSetup() {
+    const name = els.storeNameInput.value.trim();
+    if (!name) {
+      els.storeNameInput.focus();
+      return;
+    }
+    await DB.setStoreName(name);
+    els.storeSetupDialog.hidden = true;
+    updateHeader();
+  }
+
+  function toggleLayoutEditMode() {
+    if (state.editMode) toggleEditMode();
+    state.layoutEditMode = !state.layoutEditMode;
+    els.btnLayoutEdit.setAttribute('aria-pressed', String(state.layoutEditMode));
+    els.layoutHint.hidden = !state.layoutEditMode;
+    document.body.classList.toggle('layout-edit-mode', state.layoutEditMode);
+    renderGrid();
+  }
+
   function toggleEditMode() {
+    if (state.layoutEditMode) toggleLayoutEditMode();
     state.editMode = !state.editMode;
     els.btnEditMode.setAttribute('aria-pressed', String(state.editMode));
     els.editHint.hidden = !state.editMode;
     document.body.classList.toggle('edit-mode', state.editMode);
   }
 
-  // --- Store Layout Rendering ---
-
-  function renderStoreLayout() {
-    const layout = getActiveLayout();
-    const root = els.storeLayout;
+  function renderGrid() {
+    const root = els.gridLayout;
     root.innerHTML = '';
+    root.style.setProperty('--cols', state.grid.cols || DB.DEFAULT_COLS);
 
-    const floor = document.createElement('div');
-    floor.className = 'store-floor';
-
-    const chilled = createZoneCell('chilled', 'チルド');
-    chilled.classList.add('store-entrance');
-    floor.appendChild(chilled);
-
-    const body = document.createElement('div');
-    body.className = 'store-body';
-
-    const walkin = createZoneCell('walkin', 'ウォークイン');
-    const main = document.createElement('div');
-    main.className = 'store-main';
-    const register = createZoneCell('register', 'レジ');
-
-    for (const row of layout.rows) {
-      main.appendChild(createShelfRow(row));
+    for (const block of state.grid.blocks) {
+      root.appendChild(createShelfCell(block));
     }
 
-    body.appendChild(walkin);
-    body.appendChild(main);
-    body.appendChild(register);
-    floor.appendChild(body);
+    if (state.layoutEditMode) {
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'btn-add-shelf';
+      addBtn.setAttribute('aria-label', '棚を追加');
+      addBtn.textContent = '+';
+      addBtn.addEventListener('click', addShelfBlock);
+      root.appendChild(addBtn);
+    }
 
-    const bookshelf = createZoneCell('bookshelf', '本棚', true);
-    floor.appendChild(bookshelf);
-
-    root.appendChild(floor);
     updateShelfCells();
   }
 
-  function createZoneCell(zone, fallbackLabel, horizontal) {
-    const slotKey = zone;
-    const shelf = state.shelfMap[slotKey];
-    const el = document.createElement('button');
-    el.type = 'button';
-    el.className = `shelf-cell shelf-cell--zone shelf-cell--${zone}`;
-    if (horizontal) el.classList.add('shelf-cell--horizontal');
-    el.dataset.slotKey = slotKey;
-    el.innerHTML = `
-      <span class="shelf-cell__label">${escapeHtml(shelf?.name || fallbackLabel)}</span>
-      <span class="shelf-cell__badge"></span>
-      <span class="shelf-cell__check">✓</span>
-    `;
-    bindShelfCell(el, slotKey);
-    return el;
-  }
-
-  function createShelfRow(row) {
-    const rowEl = document.createElement('div');
-    rowEl.className = 'shelf-row';
-    rowEl.dataset.rowId = row.id;
-
-    const label = document.createElement('div');
-    label.className = 'shelf-row__label';
-    label.textContent = row.label;
-    rowEl.appendChild(label);
-
-    const grid = document.createElement('div');
-    grid.className = 'shelf-row__grid';
-    grid.style.setProperty('--cols', row.gridCols);
-
-    for (const cell of row.cells) {
-      const tier = cell.rowStart ? 'full' : (cell.row === 1 ? 'top' : 'bottom');
-      grid.appendChild(createShelfCell(cell.slotKey, cell.defaultName, tier, {
-        col: cell.col,
-        colSpan: cell.colSpan,
-        row: cell.row,
-        rowStart: cell.rowStart,
-        rowEnd: cell.rowEnd,
-        freezer: cell.freezer,
-      }));
-    }
-
-    rowEl.appendChild(grid);
-    return rowEl;
-  }
-
-  function createShelfCell(slotKey, fallbackName, tier, gridPos) {
-    const shelf = state.shelfMap[slotKey];
+  function createShelfCell(block) {
+    const shelf = state.shelfMap[block.slotKey];
     const el = document.createElement('button');
     el.type = 'button';
     el.className = 'shelf-cell';
-    if (tier === 'full') el.classList.add('shelf-cell--full');
-    if (tier === 'top') el.classList.add('shelf-cell--top');
-    if (tier === 'bottom') el.classList.add('shelf-cell--bottom');
-    if (gridPos?.freezer) el.classList.add('shelf-cell--freezer');
-    el.dataset.slotKey = slotKey;
-
-    if (gridPos) {
-      if (gridPos.colSpan && gridPos.colSpan > 1) {
-        el.style.gridColumn = `${gridPos.col} / span ${gridPos.colSpan}`;
-      } else {
-        el.style.gridColumn = String(gridPos.col);
-      }
-      if (gridPos.rowEnd) {
-        el.style.gridRow = `${gridPos.rowStart} / ${gridPos.rowEnd}`;
-      } else {
-        el.style.gridRow = String(gridPos.row);
-      }
-    }
-
-    const name = shelf?.name || fallbackName;
-    const shortName = shortenName(name);
+    el.dataset.slotKey = block.slotKey;
+    const name = shelf?.name || block.defaultName;
     el.innerHTML = `
-      <span class="shelf-cell__label">${escapeHtml(shortName)}</span>
+      <span class="shelf-cell__label">${escapeHtml(name)}</span>
       <span class="shelf-cell__badge"></span>
       <span class="shelf-cell__check">✓</span>
     `;
-    bindShelfCell(el, slotKey);
+    el.addEventListener('click', () => onShelfClick(block));
     return el;
   }
 
-  function shortenName(name) {
-    return name;
+  function onShelfClick(block) {
+    const shelf = state.shelfMap[block.slotKey];
+    if (!shelf) return;
+
+    if (state.layoutEditMode) {
+      state.pendingDeleteSlotKey = block.slotKey;
+      els.deleteShelfDialog.hidden = false;
+      return;
+    }
+
+    if (state.editMode) {
+      showNameDialog('棚の名称を変更', shelf.name, async (name) => {
+        if (!name || name === shelf.name) return;
+        shelf.name = name;
+        block.defaultName = name;
+        await DB.updateShelf(shelf);
+        await DB.setGridLayout(state.grid);
+        await refresh();
+        renderGrid();
+      });
+      return;
+    }
+
+    openFolder(shelf.id);
   }
 
-  function bindShelfCell(el, slotKey) {
-    el.addEventListener('click', () => {
-      const shelf = state.shelfMap[slotKey];
-      if (!shelf) return;
-      if (state.editMode) {
-        showNameDialog('棚の名称を変更', shelf.name, async (name) => {
-          if (!name || name === shelf.name) return;
-          shelf.name = name;
-          await DB.updateShelf(shelf);
-          await refresh();
-        });
-      } else {
-        openFolder(shelf.id);
-      }
-    });
+  async function addShelfBlock() {
+    const nextNum = state.grid.blocks.length + 1;
+    const slotKey = `g-${Date.now()}`;
+    state.grid.blocks.push({ slotKey, defaultName: String(nextNum) });
+    state.grid.version += 1;
+    await DB.setGridLayout(state.grid);
+    await DB.syncShelvesFromGrid(state.grid);
+    await refresh();
+    renderGrid();
+  }
+
+  async function confirmDeleteShelf() {
+    const slotKey = state.pendingDeleteSlotKey;
+    els.deleteShelfDialog.hidden = true;
+    state.pendingDeleteSlotKey = null;
+    if (!slotKey || state.grid.blocks.length <= 1) return;
+
+    state.grid.blocks = state.grid.blocks.filter((b) => b.slotKey !== slotKey);
+    state.grid.version += 1;
+    await DB.setGridLayout(state.grid);
+    await DB.syncShelvesFromGrid(state.grid);
+    await refresh();
+    renderGrid();
   }
 
   function updateShelfCells() {
@@ -324,21 +296,14 @@
       }
 
       const label = el.querySelector('.shelf-cell__label');
-      if (label && !el.classList.contains('shelf-cell--zone')) {
-        label.textContent = shortenName(shelf.name);
-      } else if (label) {
-        label.textContent = shelf.name;
-      }
+      if (label) label.textContent = shelf.name;
     });
   }
-
-  // --- Folder View ---
 
   async function openFolder(shelfId) {
     state.currentShelfId = shelfId;
     const shelf = await DB.getShelf(shelfId);
     if (!shelf) return;
-
     els.folderTitle.textContent = shelf.name;
     els.shelfChecked.checked = shelf.checked;
     els.folderOverlay.hidden = false;
@@ -355,9 +320,7 @@
   }
 
   function getPhotoObjectUrl(photoId, blob) {
-    if (state.photoUrlById[photoId]) {
-      return state.photoUrlById[photoId];
-    }
+    if (state.photoUrlById[photoId]) return state.photoUrlById[photoId];
     const url = URL.createObjectURL(blob);
     state.photoUrlById[photoId] = url;
     return url;
@@ -382,15 +345,11 @@
   async function renderPhotos(shelfId) {
     const photos = await DB.getPhotosByShelf(shelfId);
     const currentIds = new Set(photos.map((p) => p.id));
-
     for (const id of Object.keys(state.photoUrlById)) {
-      if (!currentIds.has(Number(id))) {
-        revokePhotoUrl(Number(id));
-      }
+      if (!currentIds.has(Number(id))) revokePhotoUrl(Number(id));
     }
 
     els.photoGrid.innerHTML = '';
-
     if (photos.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'folder-empty';
@@ -400,21 +359,16 @@
     }
 
     photos.sort((a, b) => a.createdAt - b.createdAt);
-
     for (const photo of photos) {
       const url = getPhotoObjectUrl(photo.id, photo.blob);
-
       const item = document.createElement('div');
       item.className = 'photo-item';
-
       const date = new Date(photo.createdAt);
       const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-
       const author = photo.author || '';
       const authorHtml = author
         ? `<span class="photo-item__author">${escapeHtml(author)}</span>`
         : '<span class="photo-item__author photo-item__author--empty">名前未入力</span>';
-
       item.innerHTML = `
         <img src="${url}" alt="清掃写真">
         <div class="photo-item__footer">
@@ -433,13 +387,7 @@
 
   function closePhotoViewer() {
     els.viewerAuthorInput.blur();
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
     els.photoViewer.hidden = true;
-    els.photoViewer.setAttribute('hidden', '');
-    els.photoViewer.setAttribute('aria-hidden', 'true');
-    els.photoViewer.classList.add('photo-viewer--closed');
     hideDeleteConfirm();
     state.viewingPhotoId = null;
     els.viewerImage.removeAttribute('src');
@@ -449,20 +397,12 @@
   }
 
   function openPhotoViewerElement() {
-    els.photoViewer.classList.remove('photo-viewer--closed');
-    els.photoViewer.removeAttribute('hidden');
     els.photoViewer.hidden = false;
-    els.photoViewer.setAttribute('aria-hidden', 'false');
     document.body.classList.add('photo-viewer-open');
   }
 
-  function showDeleteConfirm() {
-    els.photoDeleteConfirm.hidden = false;
-  }
-
-  function hideDeleteConfirm() {
-    els.photoDeleteConfirm.hidden = true;
-  }
+  function showDeleteConfirm() { els.photoDeleteConfirm.hidden = false; }
+  function hideDeleteConfirm() { els.photoDeleteConfirm.hidden = true; }
 
   async function handleCheckChange() {
     if (!state.currentShelfId) return;
@@ -486,21 +426,17 @@
   async function openPhotoViewer(photoId) {
     const photo = await DB.getPhoto(photoId);
     if (!photo) return;
-
     state.viewingPhotoId = photoId;
     els.viewerImage.src = getPhotoObjectUrl(photoId, photo.blob);
     hideDeleteConfirm();
     openPhotoViewerElement();
-
     els.viewerAuthorInput.value = '';
     els.viewerAuthorInput.placeholder = PHOTO_AUTHOR_PLACEHOLDER;
-
     const author = photo.author || '';
     if (author) {
       els.viewerAuthorInput.readOnly = false;
       els.viewerAuthorInput.value = author;
     } else {
-      // iOSが前回入力を自動入力するのを防ぐ
       els.viewerAuthorInput.readOnly = true;
       requestAnimationFrame(() => {
         if (state.viewingPhotoId !== photoId) return;
@@ -516,9 +452,13 @@
       showNameDialog('棚の名称を変更', shelf.name, async (name) => {
         if (!name || name === shelf.name) return;
         shelf.name = name;
+        const block = state.grid.blocks.find((b) => b.slotKey === shelf.slotKey);
+        if (block) block.defaultName = name;
         await DB.updateShelf(shelf);
+        await DB.setGridLayout(state.grid);
         els.folderTitle.textContent = name;
         await refresh();
+        renderGrid();
       });
     });
   }
@@ -527,15 +467,10 @@
     if (!state.viewingPhotoId) return;
     const photo = await DB.getPhoto(state.viewingPhotoId);
     if (!photo) return;
-
-    const author = els.viewerAuthorInput.value.trim().slice(0, PHOTO_AUTHOR_MAX);
-    photo.author = author;
+    photo.author = els.viewerAuthorInput.value.trim().slice(0, PHOTO_AUTHOR_MAX);
     await DB.updatePhoto(photo);
-    if (author) localStorage.setItem(LAST_AUTHOR_KEY, author);
-
     const shelfId = state.currentShelfId;
     closePhotoViewer();
-
     requestAnimationFrame(() => {
       if (shelfId) renderPhotos(shelfId);
     });
@@ -552,26 +487,19 @@
     }
   }
 
-  // --- Photo Editor (pen only) ---
-
   async function openPhotoEditor() {
     if (!state.viewingPhotoId) return;
     const photoId = state.viewingPhotoId;
     const photo = await DB.getPhoto(photoId);
     if (!photo) return;
-
-    const imgUrl = getPhotoObjectUrl(photoId, photo.blob);
-    const img = await loadImage(imgUrl);
-
+    const img = await loadImage(getPhotoObjectUrl(photoId, photo.blob));
     state.editor.open = true;
     state.editor.photoId = photoId;
     state.editor.img = img;
     state.editor.undoStack = [];
-
     closePhotoViewer();
     els.photoEditor.hidden = false;
     document.body.style.overflow = 'hidden';
-
     layoutEditorCanvas();
     drawEditorBase();
     pushEditorUndo();
@@ -601,15 +529,12 @@
     canvas.height = Math.max(1, Math.floor(rect.height * dpr));
     const ctx = canvas.getContext('2d');
     if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const cssW = rect.width;
-    const cssH = rect.height;
     const img = state.editor.img;
     if (!img) return;
-    const scale = Math.min(cssW / img.naturalWidth, cssH / img.naturalHeight);
+    const scale = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight);
     state.editor.scale = scale;
-    state.editor.offsetX = (cssW - img.naturalWidth * scale) / 2;
-    state.editor.offsetY = (cssH - img.naturalHeight * scale) / 2;
+    state.editor.offsetX = (rect.width - img.naturalWidth * scale) / 2;
+    state.editor.offsetY = (rect.height - img.naturalHeight * scale) / 2;
   }
 
   function drawEditorBase() {
@@ -619,13 +544,7 @@
     if (!ctx || !img) return;
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
-    ctx.drawImage(
-      img,
-      state.editor.offsetX,
-      state.editor.offsetY,
-      img.naturalWidth * state.editor.scale,
-      img.naturalHeight * state.editor.scale,
-    );
+    ctx.drawImage(img, state.editor.offsetX, state.editor.offsetY, img.naturalWidth * state.editor.scale, img.naturalHeight * state.editor.scale);
   }
 
   function pushEditorUndo() {
@@ -637,9 +556,7 @@
       const data = ctx.getImageData(0, 0, Math.floor(rect.width), Math.floor(rect.height));
       state.editor.undoStack.push(data);
       if (state.editor.undoStack.length > 20) state.editor.undoStack.shift();
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   }
 
   function getCanvasPoint(e) {
@@ -673,7 +590,7 @@
     e.preventDefault();
   }
 
-  function onEditorPointerUp(e) {
+  function onEditorPointerUp() {
     if (!state.editor.open || !state.editor.isDrawing) return;
     state.editor.isDrawing = false;
     const ctx = els.editorCanvas.getContext('2d');
@@ -685,35 +602,22 @@
     if (!state.editor.open || !state.editor.photoId) return;
     const photoId = state.editor.photoId;
     const photo = await DB.getPhoto(photoId);
-    if (!photo) {
-      closePhotoEditor();
-      return;
-    }
-
+    if (!photo) { closePhotoEditor(); return; }
     const canvas = els.editorCanvas;
     const img = state.editor.img;
     if (!img) return;
-
     const out = document.createElement('canvas');
     out.width = Math.max(1, img.naturalWidth);
     out.height = Math.max(1, img.naturalHeight);
     const octx = out.getContext('2d');
     if (!octx) return;
-
     const sx = state.editor.offsetX;
     const sy = state.editor.offsetY;
     const sw = img.naturalWidth * state.editor.scale;
     const sh = img.naturalHeight * state.editor.scale;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const imageData = ctx.getImageData(
-      Math.floor(sx),
-      Math.floor(sy),
-      Math.max(1, Math.floor(sw)),
-      Math.max(1, Math.floor(sh)),
-    );
-
+    const imageData = ctx.getImageData(Math.floor(sx), Math.floor(sy), Math.max(1, Math.floor(sw)), Math.max(1, Math.floor(sh)));
     const tmp = document.createElement('canvas');
     tmp.width = Math.max(1, Math.floor(sw));
     tmp.height = Math.max(1, Math.floor(sh));
@@ -721,14 +625,11 @@
     if (!tctx) return;
     tctx.putImageData(imageData, 0, 0);
     octx.drawImage(tmp, 0, 0, tmp.width, tmp.height, 0, 0, out.width, out.height);
-
     const newBlob = await canvasToBlob(out, 'image/jpeg', 0.9);
     if (!newBlob) return;
-
     photo.blob = newBlob;
     await DB.updatePhoto(photo);
-
-    const newUrl = replacePhotoObjectUrl(photoId, newBlob);
+    replacePhotoObjectUrl(photoId, newBlob);
     if (state.currentShelfId) {
       state.photoCounts = await DB.getPhotoCounts();
       updateShelfCells();
@@ -736,7 +637,6 @@
     }
     closePhotoEditor();
     await openPhotoViewer(photoId);
-    els.viewerImage.src = newUrl;
   }
 
   function loadImage(url) {
@@ -750,11 +650,7 @@
 
   function canvasToBlob(canvas, type, quality) {
     return new Promise((resolve) => {
-      try {
-        canvas.toBlob((b) => resolve(b), type, quality);
-      } catch {
-        resolve(null);
-      }
+      try { canvas.toBlob((b) => resolve(b), type, quality); } catch { resolve(null); }
     });
   }
 
@@ -763,10 +659,7 @@
     els.shelfNameInput.value = defaultValue;
     state.nameDialogCallback = callback;
     els.nameDialog.hidden = false;
-    setTimeout(() => {
-      els.shelfNameInput.focus();
-      els.shelfNameInput.select();
-    }, 100);
+    setTimeout(() => { els.shelfNameInput.focus(); els.shelfNameInput.select(); }, 100);
   }
 
   function closeNameDialog() {
@@ -776,10 +669,7 @@
 
   function confirmNameDialog() {
     const name = els.shelfNameInput.value.trim();
-    if (!name) {
-      els.shelfNameInput.focus();
-      return;
-    }
+    if (!name) { els.shelfNameInput.focus(); return; }
     const cb = state.nameDialogCallback;
     closeNameDialog();
     if (cb) cb(name);
@@ -790,6 +680,7 @@
     await DB.resetAll();
     closeFolder();
     await refresh();
+    renderGrid();
   }
 
   function escapeHtml(str) {
