@@ -454,7 +454,6 @@
     els.btnLayoutEdit.setAttribute('aria-pressed', String(state.layoutEditMode));
     els.layoutHint.hidden = !state.layoutEditMode;
     els.btnAddShelf.hidden = !state.layoutEditMode;
-    if (!state.layoutEditMode) return;
     document.body.classList.toggle('layout-edit-mode', state.layoutEditMode);
     renderBoard();
   }
@@ -563,8 +562,10 @@
   function onShelfPointerDown(e, block) {
     if (e.button > 0) return;
     e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
     state.shelfTap = {
       pointerId: e.pointerId,
+      el: e.currentTarget,
       startX: e.clientX,
       startY: e.clientY,
       block,
@@ -573,7 +574,10 @@
 
   function onShelfPointerUp(e) {
     const tap = state.shelfTap;
-    if (!tap || tap.pointerId !== e.pointerId) return;
+    if (!tap || tap.pointerId !== e.pointerId || tap.el !== e.currentTarget) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
     state.shelfTap = null;
     const dist = Math.hypot(e.clientX - tap.startX, e.clientY - tap.startY);
     if (dist < TAP_THRESHOLD) onShelfTap(tap.block);
