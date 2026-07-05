@@ -1,8 +1,9 @@
 const DB_NAME = 'shelf-cleaning-app';
 const DB_VERSION = 2;
-const STORE_ID = 'default';
+const DEFAULT_STORE_ID = 'default';
 
 let db = null;
+let activeStoreId = DEFAULT_STORE_ID;
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -56,6 +57,37 @@ function promisifyRequest(request) {
   });
 }
 
+function layoutVersionKey(storeId = activeStoreId) {
+  return `layoutVersion:${storeId}`;
+}
+
+// --- Store context ---
+
+async function initStoreContext() {
+  const row = await getConfig('currentStoreId');
+  const saved = row?.value;
+  if (saved && STORES.some((s) => s.id === saved)) {
+    activeStoreId = saved;
+  } else {
+    activeStoreId = STORES[0]?.id || DEFAULT_STORE_ID;
+  }
+  return activeStoreId;
+}
+
+function getActiveStoreId() {
+  return activeStoreId;
+}
+
+async function setActiveStoreId(storeId) {
+  if (!STORES.some((s) => s.id === storeId)) return;
+  activeStoreId = storeId;
+  await setConfig('currentStoreId', storeId);
+}
+
+function getActiveStore() {
+  return getStoreById(activeStoreId);
+}
+
 // --- Config ---
 
 async function getConfig(key) {
@@ -68,13 +100,12 @@ async function setConfig(key, value) {
   return promisifyRequest(store.put({ key, value }));
 }
 
-
 // --- Shelves ---
 
-async function getAllShelves() {
+async function getAllShelves(storeId = activeStoreId) {
   const store = await tx('shelves');
   const all = await promisifyRequest(store.getAll());
-  return all.filter((s) => s.storeId === STORE_ID);
+  return all.filter((s) => s.storeId === storeId);
 }
 
 async function getShelf(id) {
@@ -82,9 +113,9 @@ async function getShelf(id) {
   return promisifyRequest(store.get(id));
 }
 
-async function addShelf(data) {
+async function addShelf(data, storeId = activeStoreId) {
   const store = await tx('shelves', 'readwrite');
-  return promisifyRequest(store.add({ ...data, storeId: STORE_ID, checked: false }));
+  return promisifyRequest(store.add({ ...data, storeId, checked: false }));
 }
 
 async function updateShelf(shelf) {
@@ -135,22 +166,22 @@ async function getPhoto(id) {
   return promisifyRequest(store.get(id));
 }
 
-async function getShelfBySlotKey(slotKey) {
+async function getShelfBySlotKey(slotKey, storeId = activeStoreId) {
   const store = await tx('shelves');
   const index = store.index('slotKey');
   const all = await promisifyRequest(index.getAll(slotKey));
-  return all.find((s) => s.storeId === STORE_ID) || null;
+  return all.find((s) => s.storeId === storeId) || null;
 }
 
-async function seedShelvesFromTemplate() {
-  const existing = await getAllShelves();
+async function seedShelvesFromTemplate(storeId = activeStoreId) {
+  const existing = await getAllShelves(storeId);
   if (existing.length > 0) return;
 
-  const slots = getAllSlots();
+  const slots = getAllSlotsForStore(storeId);
   const store = await tx('shelves', 'readwrite');
   for (const slot of slots) {
     await promisifyRequest(store.add({
-      storeId: STORE_ID,
+      storeId,
       slotKey: slot.slotKey,
       name: slot.defaultName,
       checked: false,
@@ -158,18 +189,22 @@ async function seedShelvesFromTemplate() {
   }
 }
 
-async function getLayoutVersion() {
-  const row = await getConfig('layoutVersion');
-  return row ? row.value : 0;
+async function getLayoutVersion(storeId = activeStoreId) {
+  const row = await getConfig(layoutVersionKey(storeId));
+  if (row) return row.value;
+
+  // 旧形式（店舗共通）からの移行
+  const legacy = await getConfig('layoutVersion');
+  return legacy ? legacy.value : 0;
 }
 
-async function setLayoutVersion(version) {
-  return setConfig('layoutVersion', version);
+async function setLayoutVersion(version, storeId = activeStoreId) {
+  return setConfig(layoutVersionKey(storeId), version);
 }
 
 // --- Reset ---
 
-async function resetAll() {
+async function resetAll(storeId = activeStoreId) {
   const database = await openDB();
   const transaction = database.transaction(['shelves', 'photos'], 'readwrite');
 
@@ -178,7 +213,7 @@ async function resetAll() {
 
   const shelves = await promisifyRequest(shelfStore.getAll());
   for (const shelf of shelves) {
-    if (shelf.storeId === STORE_ID) {
+    if (shelf.storeId === storeId) {
       shelf.checked = false;
       shelfStore.put(shelf);
     }
@@ -187,7 +222,7 @@ async function resetAll() {
   const photos = await promisifyRequest(photoStore.getAll());
   for (const photo of photos) {
     const shelf = shelves.find((s) => s.id === photo.shelfId);
-    if (shelf && shelf.storeId === STORE_ID) {
+    if (shelf && shelf.storeId === storeId) {
       photoStore.delete(photo.id);
     }
   }
@@ -200,8 +235,8 @@ async function resetAll() {
 
 // --- Photo counts (metadata only — never load blobs for counting) ---
 
-async function getPhotoCounts() {
-  const shelves = await getAllShelves();
+async function getPhotoCounts(storeId = activeStoreId) {
+  const shelves = await getAllShelves(storeId);
   const database = await openDB();
   const transaction = database.transaction('photos', 'readonly');
   const index = transaction.objectStore('photos').index('shelfId');
@@ -225,7 +260,11 @@ async function getPhotoCounts() {
 }
 
 window.DB = {
-  STORE_ID,
+  DEFAULT_STORE_ID,
+  initStoreContext,
+  getActiveStoreId,
+  setActiveStoreId,
+  getActiveStore,
   getAllShelves,
   getShelf,
   getShelfBySlotKey,

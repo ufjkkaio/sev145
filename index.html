@@ -11,12 +11,18 @@
   <title>店内棚 清掃管理</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/app.css?v=26">
+  <link rel="stylesheet" href="css/app.css?v=28">
 </head>
 <body>
   <div id="app">
     <header class="header">
-      <h1 class="header__title">店内棚 清掃管理</h1>
+      <div class="header__lead">
+        <button type="button" id="btn-store-picker" class="header__store-btn" aria-haspopup="dialog">
+          <span id="header-store-name" class="header__store-name">145号店</span>
+          <span class="header__store-chevron" aria-hidden="true">▾</span>
+        </button>
+        <h1 class="header__title">棚清掃</h1>
+      </div>
       <div class="header__actions">
         <button type="button" id="btn-edit-mode" class="btn btn--ghost" aria-pressed="false">名称編集</button>
         <button type="button" id="btn-reset" class="btn btn--header-reset">リセット</button>
@@ -86,10 +92,20 @@
     <div id="reset-dialog" class="dialog-overlay" hidden>
       <div class="dialog" role="dialog">
         <h3 class="dialog__title">すべてリセットしますか？</h3>
-        <p class="dialog__message">すべての写真と清掃完了のチェックが削除されます。この操作は元に戻せません。</p>
+        <p id="reset-dialog-message" class="dialog__message">この店舗のすべての写真と清掃完了のチェックが削除されます。この操作は元に戻せません。</p>
         <div class="dialog__actions">
           <button type="button" id="btn-reset-cancel" class="btn btn--ghost">キャンセル</button>
           <button type="button" id="btn-reset-ok" class="btn btn--danger">リセット</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="store-dialog" class="dialog-overlay" hidden>
+      <div class="dialog" role="dialog" aria-labelledby="store-dialog-title">
+        <h3 id="store-dialog-title" class="dialog__title">店舗を選択</h3>
+        <div id="store-list" class="store-list"></div>
+        <div class="dialog__actions">
+          <button type="button" id="btn-store-cancel" class="btn btn--ghost">閉じる</button>
         </div>
       </div>
     </div>
@@ -130,8 +146,9 @@
     </div>
   </div>
 
-  <script src="js/layout-template.js?v=26"></script>
-  <script src="js/db.js?v=26"></script>
-  <script src="js/app.js?v=26"></script>
+  <script src="js/stores.js?v=28"></script>
+  <script src="js/layout-template.js?v=28"></script>
+  <script src="js/db.js?v=28"></script>
+  <script src="js/app.js?v=28"></script>
 </body>
 </html>

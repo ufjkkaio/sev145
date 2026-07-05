@@ -51,20 +51,58 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--header-h);
-  padding: 0 12px;
+  height: auto;
+  min-height: var(--header-h);
+  padding: 6px 12px;
   background: var(--color-primary);
   color: #fff;
   flex-shrink: 0;
   z-index: 100;
+  gap: 8px;
 }
 
-.header__title {
-  font-size: 16px;
-  font-weight: 600;
+.header__lead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.header__store-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px 2px 0;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.header__store-name {
+  font-size: 15px;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.header__store-chevron {
+  font-size: 11px;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.header__title {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.85;
+  white-space: nowrap;
 }
 
 .header__actions {
@@ -722,6 +760,46 @@ body {
 .dialog__actions .btn--danger {
   color: #fff;
   background: var(--color-danger);
+}
+
+.store-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.store-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.store-list__item--active {
+  border-color: var(--color-primary);
+  background: #f5fff7;
+}
+
+.store-list__name {
+  font-weight: 600;
+}
+
+.store-list__badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-primary);
+  white-space: nowrap;
 }
 
 /* ===== Photo Viewer ===== */

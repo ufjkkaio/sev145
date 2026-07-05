@@ -8,6 +8,12 @@
   const LAST_AUTHOR_KEY = 'lastPhotographer';
 
   const els = {
+    btnStorePicker: $('#btn-store-picker'),
+    headerStoreName: $('#header-store-name'),
+    storeDialog: $('#store-dialog'),
+    storeList: $('#store-list'),
+    btnStoreCancel: $('#btn-store-cancel'),
+    resetDialogMessage: $('#reset-dialog-message'),
     btnEditMode: $('#btn-edit-mode'),
     btnReset: $('#btn-reset'),
     storeLayout: $('#store-layout'),
@@ -47,6 +53,7 @@
 
   let state = {
     editMode: false,
+    activeLayout: null,
     shelfMap: {},
     photoCounts: {},
     currentShelfId: null,
@@ -69,9 +76,16 @@
   const PEN_COLOR = '#e53935';
   const PEN_SIZE = 6;
 
+  function getActiveLayout() {
+    return state.activeLayout || getLayoutForStore(DB.getActiveStoreId());
+  }
+
   async function init() {
     registerServiceWorker();
     bindEvents();
+    await DB.initStoreContext();
+    state.activeLayout = getLayoutForStore(DB.getActiveStoreId());
+    updateHeaderStoreName();
     await ensureShelves();
     await refresh();
     renderStoreLayout();
@@ -79,19 +93,20 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=26').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=28').catch(() => {});
     }
   }
 
   async function ensureShelves() {
+    const layout = getActiveLayout();
     const version = await DB.getLayoutVersion();
-    if (version !== LAYOUT_TEMPLATE.version) {
+    if (version !== layout.version) {
       const shelves = await DB.getAllShelves();
       for (const shelf of shelves) {
         await DB.deleteShelf(shelf.id);
       }
       await DB.seedShelvesFromTemplate();
-      await DB.setLayoutVersion(LAYOUT_TEMPLATE.version);
+      await DB.setLayoutVersion(layout.version);
     } else {
       await DB.seedShelvesFromTemplate();
     }
@@ -108,6 +123,12 @@
   }
 
   function bindEvents() {
+    els.btnStorePicker.addEventListener('click', openStoreDialog);
+    els.btnStoreCancel.addEventListener('click', closeStoreDialog);
+    els.storeDialog.addEventListener('click', (e) => {
+      if (e.target === els.storeDialog) closeStoreDialog();
+    });
+
     els.btnEditMode.addEventListener('click', toggleEditMode);
 
     els.btnFolderBack.addEventListener('click', closeFolder);
@@ -127,6 +148,9 @@
     });
 
     els.btnReset.addEventListener('click', () => {
+      const store = DB.getActiveStore();
+      els.resetDialogMessage.textContent =
+        `「${store.name}」のすべての写真と清掃完了のチェックが削除されます。この操作は元に戻せません。`;
       els.resetDialog.hidden = false;
     });
     els.btnResetCancel.addEventListener('click', () => { els.resetDialog.hidden = true; });
@@ -154,6 +178,59 @@
     els.editorCanvas.addEventListener('pointercancel', onEditorPointerUp);
   }
 
+  function updateHeaderStoreName() {
+    const store = DB.getActiveStore();
+    els.headerStoreName.textContent = store.name;
+    document.title = `${store.name} 棚清掃`;
+  }
+
+  function openStoreDialog() {
+    renderStoreList();
+    els.storeDialog.hidden = false;
+  }
+
+  function closeStoreDialog() {
+    els.storeDialog.hidden = true;
+  }
+
+  function renderStoreList() {
+    const currentId = DB.getActiveStoreId();
+    els.storeList.innerHTML = '';
+
+    for (const store of STORES) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'store-list__item';
+      if (store.id === currentId) btn.classList.add('store-list__item--active');
+      btn.innerHTML = `
+        <span class="store-list__name">${escapeHtml(store.name)}</span>
+        ${store.id === currentId ? '<span class="store-list__badge">選択中</span>' : ''}
+      `;
+      btn.addEventListener('click', () => switchStore(store.id));
+      els.storeList.appendChild(btn);
+    }
+  }
+
+  async function switchStore(storeId) {
+    if (storeId === DB.getActiveStoreId()) {
+      closeStoreDialog();
+      return;
+    }
+
+    closeStoreDialog();
+    closePhotoEditor();
+    closePhotoViewer();
+    closeFolder();
+    if (state.editMode) toggleEditMode();
+
+    await DB.setActiveStoreId(storeId);
+    state.activeLayout = getLayoutForStore(storeId);
+    updateHeaderStoreName();
+    await ensureShelves();
+    await refresh();
+    renderStoreLayout();
+  }
+
   function toggleEditMode() {
     state.editMode = !state.editMode;
     els.btnEditMode.setAttribute('aria-pressed', String(state.editMode));
@@ -164,6 +241,7 @@
   // --- Store Layout Rendering ---
 
   function renderStoreLayout() {
+    const layout = getActiveLayout();
     const root = els.storeLayout;
     root.innerHTML = '';
 
@@ -182,7 +260,7 @@
     main.className = 'store-main';
     const register = createZoneCell('register', 'レジ');
 
-    for (const row of LAYOUT_TEMPLATE.rows) {
+    for (const row of layout.rows) {
       main.appendChild(createShelfRow(row));
     }
 
