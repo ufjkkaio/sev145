@@ -213,6 +213,11 @@
   transform: scale(0.94);
 }
 
+.zoom-controls__btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .zoom-controls__label {
   min-width: 44px;
   text-align: center;

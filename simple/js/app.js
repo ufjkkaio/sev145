@@ -18,8 +18,8 @@
   const SWIPE_RESIZE = 22;
   const SNAP_DIST = 32;
   const MAX_BLOCK_CELLS = 16;
-  const VIEW_SCALE_MIN = 0.25;
-  const VIEW_SCALE_MAX = 3;
+  const VIEW_SCALE_MIN = 0.5;
+  const VIEW_SCALE_MAX = 2;
 
   const els = {
     btnStoreName: $('#btn-store-name'),
@@ -109,6 +109,7 @@
     bindEvents();
     state.board = await DB.getBoardLayout();
     state.view = await DB.getBoardView();
+    state.view.scale = clampScale(state.view.scale ?? 1);
     await DB.syncShelvesFromBoard(state.board);
     updateHeader();
     await refresh();
@@ -232,6 +233,38 @@
     return Math.max(VIEW_SCALE_MIN, Math.min(VIEW_SCALE_MAX, scale));
   }
 
+  function clampView() {
+    const mapW = els.mapArea?.clientWidth || 0;
+    const mapH = els.mapArea?.clientHeight || 0;
+    const v = state.view;
+    v.scale = clampScale(v.scale);
+
+    const boardW = BOARD_WIDTH_PX * v.scale;
+    const boardH = BOARD_HEIGHT_PX * v.scale;
+
+    let minX;
+    let maxX;
+    let minY;
+    let maxY;
+
+    if (boardW <= mapW) {
+      minX = maxX = (mapW - boardW) / 2;
+    } else {
+      minX = mapW - boardW;
+      maxX = 0;
+    }
+
+    if (boardH <= mapH) {
+      minY = maxY = (mapH - boardH) / 2;
+    } else {
+      minY = mapH - boardH;
+      maxY = 0;
+    }
+
+    v.x = Math.max(minX, Math.min(maxX, v.x));
+    v.y = Math.max(minY, Math.min(maxY, v.y));
+  }
+
   function screenToBoard(clientX, clientY) {
     const mapRect = els.mapArea.getBoundingClientRect();
     const v = state.view;
@@ -243,10 +276,17 @@
 
   function applyViewTransform(save = false) {
     if (!els.boardTransform) return;
+    clampView();
     const v = state.view;
     els.boardTransform.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.scale})`;
     if (els.zoomLabel) {
       els.zoomLabel.textContent = `${Math.round(v.scale * 100)}%`;
+    }
+    if (els.btnZoomIn) {
+      els.btnZoomIn.disabled = v.scale >= VIEW_SCALE_MAX - 0.001;
+    }
+    if (els.btnZoomOut) {
+      els.btnZoomOut.disabled = v.scale <= VIEW_SCALE_MIN + 0.001;
     }
     if (save) DB.setBoardView({ ...v });
   }
