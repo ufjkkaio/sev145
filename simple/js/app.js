@@ -103,6 +103,7 @@
 
   async function init() {
     registerServiceWorker();
+    showBuildVersion();
     bindEvents();
     state.board = await DB.getBoardLayout();
     state.view = await DB.getBoardView();
@@ -117,9 +118,24 @@
   }
 
   function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=34').catch(() => {});
-    }
+    if (!('serviceWorker' in navigator)) return;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
+    const v = document.querySelector('script[src*="app.js"]')?.src.match(/[?&]v=(\d+)/)?.[1] || '';
+    navigator.serviceWorker.register(`./sw.js?v=${v}`).then((reg) => {
+      reg.update();
+    }).catch(() => {});
+  }
+
+  function showBuildVersion() {
+    const script = document.querySelector('script[src*="app.js"]');
+    const v = script && new URL(script.src, location.href).searchParams.get('v');
+    const el = document.getElementById('app-version');
+    if (el && v) el.textContent = `v${v}`;
   }
 
   async function refresh() {

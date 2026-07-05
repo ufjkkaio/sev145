@@ -1,19 +1,11 @@
-const CACHE_NAME = 'shelf-cleaning-simple-v34';
-const ASSETS = [
-  './',
-  './index.html',
-  '../css/app.css?v=34',
-  './css/simple.css?v=34',
-  './js/db.js?v=34',
-  './js/app.js?v=34',
-  './manifest.json',
+const CACHE_NAME = 'shelf-cleaning-simple-v35';
+const OFFLINE_ONLY = [
   '../icons/icon-192.png',
   '../icons/icon-512.png',
-  './sw.js?v=34',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_ONLY)));
   self.skipWaiting();
 });
 
@@ -26,38 +18,10 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+// HTML/JS/CSS は常にネットワーク優先（古いキャッシュを返さない）
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-
-  const url = new URL(e.request.url);
-  const isAppScript = url.pathname.endsWith('.js') || url.pathname.endsWith('.css');
-  const isHtml = e.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/');
-
-  if (isAppScript || isHtml) {
-    e.respondWith(
-      fetch(e.request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(e.request)),
-    );
-    return;
-  }
-
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request).then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
-        }
-        return response;
-      });
-    }),
+    fetch(e.request).catch(() => caches.match(e.request)),
   );
 });
