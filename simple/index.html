@@ -11,8 +11,8 @@
   <title>棚清掃</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="../icons/icon-192.png">
-  <link rel="stylesheet" href="../css/app.css?v=29">
-  <link rel="stylesheet" href="css/simple.css?v=1">
+  <link rel="stylesheet" href="../css/app.css?v=30">
+  <link rel="stylesheet" href="css/simple.css?v=6">
 </head>
 <body>
   <div id="app">
@@ -24,16 +24,20 @@
       <div class="header__actions">
         <button type="button" id="btn-layout-edit" class="btn btn--ghost" aria-pressed="false">レイアウト</button>
         <button type="button" id="btn-edit-mode" class="btn btn--ghost" aria-pressed="false">名称編集</button>
+        <button type="button" id="btn-delete-selected" class="btn btn--danger" hidden>削除</button>
         <button type="button" id="btn-reset" class="btn btn--header-reset">リセット</button>
       </div>
     </header>
 
-    <main class="map-area" id="map-area">
-      <div id="grid-layout" class="grid-layout"></div>
+    <main class="map-area map-area--whiteboard" id="map-area">
+      <div class="whiteboard">
+        <div id="board-canvas" class="whiteboard__canvas"></div>
+      </div>
+      <button type="button" id="btn-add-shelf" class="fab-add-shelf" hidden>棚を追加</button>
     </main>
 
     <div id="edit-hint" class="edit-hint" hidden>棚をタップして名称を変更</div>
-    <div id="layout-hint" class="edit-hint" hidden>タップで削除、＋で棚を追加</div>
+    <div id="layout-hint" class="edit-hint" hidden>タップで選択→スワイプで伸ばす・ドラッグで移動・重ねると1マスに合体</div>
 
     <div id="folder-overlay" class="folder-overlay" hidden>
       <div class="folder" role="dialog" aria-labelledby="folder-title">
@@ -151,7 +155,7 @@
     </div>
   </div>
 
-  <script src="js/db.js?v=1"></script>
-  <script src="js/app.js?v=1"></script>
+  <script src="js/db.js?v=6"></script>
+  <script src="js/app.js?v=6"></script>
 </body>
 </html>

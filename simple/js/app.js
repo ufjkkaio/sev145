@@ -7,12 +7,23 @@
   const PEN_COLOR = '#e53935';
   const PEN_SIZE = 6;
 
+  const CELL = 72;
+  const GAP = 6;
+  const STEP = CELL + GAP;
+  const PAD = 16;
+  const TAP_THRESHOLD = 8;
+  const SWIPE_RESIZE = 36;
+  const SNAP_DIST = 36;
+  const MAX_BLOCK_CELLS = 16;
+
   const els = {
     headerStoreName: $('#header-store-name'),
     btnLayoutEdit: $('#btn-layout-edit'),
     btnEditMode: $('#btn-edit-mode'),
     btnReset: $('#btn-reset'),
-    gridLayout: $('#grid-layout'),
+    btnAddShelf: $('#btn-add-shelf'),
+    btnDeleteSelected: $('#btn-delete-selected'),
+    boardCanvas: $('#board-canvas'),
     editHint: $('#edit-hint'),
     layoutHint: $('#layout-hint'),
     folderOverlay: $('#folder-overlay'),
@@ -54,7 +65,7 @@
   };
 
   let state = {
-    grid: null,
+    board: null,
     editMode: false,
     layoutEditMode: false,
     shelfMap: {},
@@ -64,6 +75,8 @@
     viewingPhotoId: null,
     nameDialogCallback: null,
     pendingDeleteSlotKey: null,
+    selectedSlotKey: null,
+    drag: null,
     editor: {
       open: false,
       isDrawing: false,
@@ -79,11 +92,11 @@
   async function init() {
     registerServiceWorker();
     bindEvents();
-    state.grid = await DB.getGridLayout();
-    await DB.syncShelvesFromGrid(state.grid);
+    state.board = await DB.getBoardLayout();
+    await DB.syncShelvesFromBoard(state.board);
     updateHeader();
     await refresh();
-    renderGrid();
+    renderBoard();
     if (!(await DB.getStoreName())) {
       els.storeSetupDialog.hidden = false;
       els.storeNameInput.focus();
@@ -92,7 +105,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=1').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=6').catch(() => {});
     }
   }
 
@@ -117,6 +130,19 @@
   function bindEvents() {
     els.btnLayoutEdit.addEventListener('click', toggleLayoutEditMode);
     els.btnEditMode.addEventListener('click', toggleEditMode);
+    els.btnAddShelf.addEventListener('click', addShelfBlock);
+    els.btnDeleteSelected.addEventListener('click', () => {
+      if (state.selectedSlotKey) {
+        state.pendingDeleteSlotKey = state.selectedSlotKey;
+        els.deleteShelfDialog.hidden = false;
+      }
+    });
+    els.boardCanvas.addEventListener('pointerdown', (e) => {
+      if (!state.layoutEditMode) return;
+      if (e.target === els.boardCanvas || e.target.classList.contains('whiteboard-empty')) {
+        clearSelection();
+      }
+    });
     els.btnFolderBack.addEventListener('click', closeFolder);
     els.folderOverlay.addEventListener('click', (e) => {
       if (e.target === els.folderOverlay) closeFolder();
@@ -178,8 +204,31 @@
     state.layoutEditMode = !state.layoutEditMode;
     els.btnLayoutEdit.setAttribute('aria-pressed', String(state.layoutEditMode));
     els.layoutHint.hidden = !state.layoutEditMode;
+    els.btnAddShelf.hidden = !state.layoutEditMode;
+    if (!state.layoutEditMode) clearSelection();
     document.body.classList.toggle('layout-edit-mode', state.layoutEditMode);
-    renderGrid();
+    renderBoard();
+  }
+
+  function selectBlock(slotKey) {
+    state.selectedSlotKey = slotKey;
+    els.btnDeleteSelected.hidden = !state.layoutEditMode;
+    renderBoard();
+  }
+
+  function clearSelection() {
+    state.selectedSlotKey = null;
+    els.btnDeleteSelected.hidden = true;
+    document.querySelectorAll('.board-block--selected').forEach((el) => {
+      el.classList.remove('board-block--selected');
+    });
+  }
+
+  function updateSelectionUI() {
+    document.querySelectorAll('.board-block[data-slot-key]').forEach((el) => {
+      el.classList.toggle('board-block--selected', el.dataset.slotKey === state.selectedSlotKey);
+    });
+    els.btnDeleteSelected.hidden = !state.layoutEditMode || !state.selectedSlotKey;
   }
 
   function toggleEditMode() {
@@ -190,53 +239,88 @@
     document.body.classList.toggle('edit-mode', state.editMode);
   }
 
-  function renderGrid() {
-    const root = els.gridLayout;
-    root.innerHTML = '';
-    root.style.setProperty('--cols', state.grid.cols || DB.DEFAULT_COLS);
-
-    for (const block of state.grid.blocks) {
-      root.appendChild(createShelfCell(block));
-    }
-
-    if (state.layoutEditMode) {
-      const addBtn = document.createElement('button');
-      addBtn.type = 'button';
-      addBtn.className = 'btn-add-shelf';
-      addBtn.setAttribute('aria-label', '棚を追加');
-      addBtn.textContent = '+';
-      addBtn.addEventListener('click', addShelfBlock);
-      root.appendChild(addBtn);
-    }
-
-    updateShelfCells();
+  function blockPx(block) {
+    return {
+      left: PAD + block.x * STEP,
+      top: PAD + block.y * STEP,
+      width: block.w * CELL + (block.w - 1) * GAP,
+      height: block.h * CELL + (block.h - 1) * GAP,
+    };
   }
 
-  function createShelfCell(block) {
+  function boardSize() {
+    let maxX = 4;
+    let maxY = 6;
+    for (const b of state.board.blocks) {
+      maxX = Math.max(maxX, b.x + b.w + 1);
+      maxY = Math.max(maxY, b.y + b.h + 1);
+    }
+    return {
+      width: PAD * 2 + maxX * STEP,
+      height: PAD * 2 + maxY * STEP,
+    };
+  }
+
+  function renderBoard() {
+    const root = els.boardCanvas;
+    root.innerHTML = '';
+    const size = boardSize();
+    root.style.width = `${size.width}px`;
+    root.style.height = `${size.height}px`;
+
+    if (state.board.blocks.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'whiteboard-empty';
+      empty.textContent = state.layoutEditMode
+        ? '「棚を追加」で正方形を置けます'
+        : 'レイアウトから棚を追加してください';
+      root.appendChild(empty);
+    }
+
+    for (const block of state.board.blocks) {
+      root.appendChild(createBoardBlock(block));
+    }
+    updateShelfCells();
+    updateSelectionUI();
+  }
+
+  function createBoardBlock(block) {
     const shelf = state.shelfMap[block.slotKey];
+    const px = blockPx(block);
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = 'shelf-cell';
+    el.className = 'board-block shelf-cell';
+    if (state.selectedSlotKey === block.slotKey) {
+      el.classList.add('board-block--selected');
+    }
     el.dataset.slotKey = block.slotKey;
+    el.style.left = `${px.left}px`;
+    el.style.top = `${px.top}px`;
+    el.style.width = `${px.width}px`;
+    el.style.height = `${px.height}px`;
+
     const name = shelf?.name || block.defaultName;
     el.innerHTML = `
       <span class="shelf-cell__label">${escapeHtml(name)}</span>
       <span class="shelf-cell__badge"></span>
       <span class="shelf-cell__check">✓</span>
     `;
-    el.addEventListener('click', () => onShelfClick(block));
+
+    if (state.layoutEditMode) {
+      el.addEventListener('pointerdown', (e) => onBlockPointerDown(e, block));
+      el.addEventListener('pointermove', onBlockPointerMove);
+      el.addEventListener('pointerup', onBlockPointerUp);
+      el.addEventListener('pointercancel', onBlockPointerUp);
+    } else {
+      el.addEventListener('click', () => onShelfTap(block));
+    }
+
     return el;
   }
 
-  function onShelfClick(block) {
+  function onShelfTap(block) {
     const shelf = state.shelfMap[block.slotKey];
     if (!shelf) return;
-
-    if (state.layoutEditMode) {
-      state.pendingDeleteSlotKey = block.slotKey;
-      els.deleteShelfDialog.hidden = false;
-      return;
-    }
 
     if (state.editMode) {
       showNameDialog('棚の名称を変更', shelf.name, async (name) => {
@@ -244,9 +328,9 @@
         shelf.name = name;
         block.defaultName = name;
         await DB.updateShelf(shelf);
-        await DB.setGridLayout(state.grid);
+        await saveBoard();
         await refresh();
-        renderGrid();
+        renderBoard();
       });
       return;
     }
@@ -254,33 +338,371 @@
     openFolder(shelf.id);
   }
 
-  async function addShelfBlock() {
-    const nextNum = state.grid.blocks.length + 1;
-    const slotKey = `g-${Date.now()}`;
-    state.grid.blocks.push({ slotKey, defaultName: String(nextNum) });
-    state.grid.version += 1;
-    await DB.setGridLayout(state.grid);
-    await DB.syncShelvesFromGrid(state.grid);
+  function onBlockPointerDown(e, block) {
+    if (!state.layoutEditMode || e.button > 0) return;
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const px = blockPx(block);
+    const canvasRect = els.boardCanvas.getBoundingClientRect();
+    state.drag = {
+      slotKey: block.slotKey,
+      wasSelected: state.selectedSlotKey === block.slotKey,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      repositioning: false,
+      offsetX: e.clientX - (canvasRect.left + px.left),
+      offsetY: e.clientY - (canvasRect.top + px.top),
+      el,
+    };
+    e.preventDefault();
+  }
+
+  function onBlockPointerMove(e) {
+    const drag = state.drag;
+    if (!drag || drag.el !== e.currentTarget) return;
+
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    if (!drag.repositioning && (Math.abs(dx) > TAP_THRESHOLD || Math.abs(dy) > TAP_THRESHOLD)) {
+      drag.repositioning = true;
+      drag.moved = true;
+      drag.el.classList.add('board-block--dragging');
+    }
+    if (!drag.repositioning) return;
+
+    const block = getBlock(drag.slotKey);
+    if (!block) return;
+
+    const canvasRect = els.boardCanvas.getBoundingClientRect();
+    let left = e.clientX - canvasRect.left - drag.offsetX;
+    let top = e.clientY - canvasRect.top - drag.offsetY;
+
+    const drop = resolveDrop(block, left, top);
+    clearSnapHighlight();
+    clearMergeHighlight();
+
+    if (drop.type === 'merge') {
+      const mpx = blockPx(drop.preview);
+      left = mpx.left;
+      top = mpx.top;
+      drag.el.style.width = `${mpx.width}px`;
+      drag.el.style.height = `${mpx.height}px`;
+      drag.el.classList.add('board-block--merging');
+      highlightMergeTarget(drop.mergeTarget);
+    } else {
+      const px = blockPx({ ...block, x: drop.x, y: drop.y });
+      left = px.left;
+      top = px.top;
+      drag.el.style.width = `${px.width}px`;
+      drag.el.style.height = `${px.height}px`;
+      drag.el.classList.remove('board-block--merging');
+      if (drop.snapTarget) highlightSnapTarget(drop.snapTarget);
+    }
+
+    drag.el.style.left = `${left}px`;
+    drag.el.style.top = `${top}px`;
+    e.preventDefault();
+  }
+
+  async function onBlockPointerUp(e) {
+    const drag = state.drag;
+    if (!drag || drag.el !== e.currentTarget) return;
+
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    const dist = Math.hypot(dx, dy);
+
+    drag.el.classList.remove('board-block--dragging');
+    drag.el.classList.remove('board-block--merging');
+    drag.el.releasePointerCapture(e.pointerId);
+    clearSnapHighlight();
+    clearMergeHighlight();
+
+    const block = getBlock(drag.slotKey);
+
+    if (!drag.repositioning && drag.wasSelected && dist >= SWIPE_RESIZE && block) {
+      const resized = await tryResizeBlock(block, dx, dy);
+      state.drag = null;
+      if (resized) {
+        await refresh();
+        renderBoard();
+      }
+      return;
+    }
+
+    if (!drag.repositioning) {
+      if (state.selectedSlotKey === drag.slotKey) {
+        clearSelection();
+      } else {
+        selectBlock(drag.slotKey);
+      }
+      state.drag = null;
+      return;
+    }
+
+    if (!block) {
+      state.drag = null;
+      return;
+    }
+
+    const relLeft = parseFloat(drag.el.style.left);
+    const relTop = parseFloat(drag.el.style.top);
+    const drop = resolveDrop(block, relLeft, relTop);
+
+    if (drop.type === 'merge') {
+      await mergeBlocksAt(block, drop.mergeTarget, drop.preview);
+      clearSelection();
+    } else {
+      block.x = drop.x;
+      block.y = drop.y;
+      await saveBoard();
+      selectBlock(block.slotKey);
+    }
+
+    state.drag = null;
     await refresh();
-    renderGrid();
+    renderBoard();
+  }
+
+  async function tryResizeBlock(block, vx, vy) {
+    const next = { ...block };
+    const ignore = [block.slotKey];
+
+    if (Math.abs(vx) >= Math.abs(vy)) {
+      if (vx > 0) next.w += 1;
+      else {
+        next.x -= 1;
+        next.w += 1;
+      }
+    } else if (vy > 0) {
+      next.h += 1;
+    } else {
+      next.y -= 1;
+      next.h += 1;
+    }
+
+    if (next.x < 0 || next.y < 0) return false;
+    if (next.w > MAX_BLOCK_CELLS || next.h > MAX_BLOCK_CELLS) return false;
+    if (!canPlaceMerged(next, ignore)) return false;
+
+    block.x = next.x;
+    block.y = next.y;
+    block.w = next.w;
+    block.h = next.h;
+    await saveBoard();
+    return true;
+  }
+
+  function getBlock(slotKey) {
+    return state.board.blocks.find((b) => b.slotKey === slotKey);
+  }
+
+  function cellsOccupied(block, blocks = state.board.blocks) {
+    const set = new Set();
+    for (const b of blocks) {
+      if (b.slotKey === block.slotKey) continue;
+      for (let dy = 0; dy < b.h; dy++) {
+        for (let dx = 0; dx < b.w; dx++) {
+          set.add(`${b.x + dx},${b.y + dy}`);
+        }
+      }
+    }
+    return set;
+  }
+
+  function canPlace(block, x, y, blocks = state.board.blocks) {
+    const occupied = cellsOccupied(block, blocks);
+    for (let dy = 0; dy < block.h; dy++) {
+      for (let dx = 0; dx < block.w; dx++) {
+        if (x + dx < 0 || y + dy < 0) return false;
+        if (occupied.has(`${x + dx},${y + dy}`)) return false;
+      }
+    }
+    return true;
+  }
+
+  function canPlaceMerged(rect, ignoreSlotKeys) {
+    const blocks = state.board.blocks.filter((b) => !ignoreSlotKeys.includes(b.slotKey));
+    const probe = { slotKey: '__probe__', ...rect };
+    return canPlace(probe, rect.x, rect.y, blocks);
+  }
+
+  function findEmptyCell(w = 1, h = 1) {
+    for (let y = 0; y < 30; y++) {
+      for (let x = 0; x < 12; x++) {
+        const probe = { slotKey: '__probe__', x, y, w, h };
+        if (canPlace(probe, x, y)) return { x, y };
+      }
+    }
+    return { x: 0, y: state.board.blocks.length };
+  }
+
+  function gridRectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  function resolveDrop(block, relLeft, relTop) {
+    const gx = Math.round((relLeft - PAD) / STEP);
+    const gy = Math.round((relTop - PAD) / STEP);
+    const placed = { ...block, x: gx, y: gy };
+
+    for (const other of state.board.blocks) {
+      if (other.slotKey === block.slotKey) continue;
+      if (gridRectsOverlap(placed, other)) {
+        return {
+          type: 'merge',
+          mergeTarget: other,
+          preview: mergeIntoOneCell(other),
+        };
+      }
+    }
+
+    const snap = findBestSnapPosition(block, relLeft, relTop);
+    return { type: 'snap', x: snap.x, y: snap.y, snapTarget: snap.nearOther || null };
+  }
+
+  function mergeIntoOneCell(other) {
+    return { x: other.x, y: other.y, w: 1, h: 1 };
+  }
+
+  function findBestSnapPosition(block, relLeft, relTop) {
+    const candidates = [];
+    const gx = Math.round((relLeft - PAD) / STEP);
+    const gy = Math.round((relTop - PAD) / STEP);
+
+    if (canPlace(block, gx, gy)) {
+      const px = blockPx({ ...block, x: gx, y: gy });
+      candidates.push({
+        x: gx,
+        y: gy,
+        dist: Math.hypot(relLeft - px.left, relTop - px.top),
+        nearOther: null,
+      });
+    }
+
+    for (const other of state.board.blocks) {
+      if (other.slotKey === block.slotKey) continue;
+      const adjacentPositions = [
+        { x: other.x + other.w, y: other.y },
+        { x: other.x - block.w, y: other.y },
+        { x: other.x, y: other.y + other.h },
+        { x: other.x, y: other.y - block.h },
+      ];
+      for (const pos of adjacentPositions) {
+        if (!canPlace(block, pos.x, pos.y)) continue;
+        const px = blockPx({ ...block, ...pos });
+        const dist = Math.hypot(relLeft - px.left, relTop - px.top);
+        if (dist <= SNAP_DIST + STEP) {
+          candidates.push({ x: pos.x, y: pos.y, dist, nearOther: other });
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      const empty = findNearestEmpty(block, gx, gy);
+      return { x: empty.x, y: empty.y, nearOther: null };
+    }
+
+    for (const c of candidates) {
+      if (c.nearOther) c.dist -= 20;
+    }
+    candidates.sort((a, b) => a.dist - b.dist);
+    return candidates[0];
+  }
+
+  function findNearestEmpty(block, gx, gy) {
+    for (let r = 0; r < 30; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const x = gx + dx;
+          const y = gy + dy;
+          if (x < 0 || y < 0) continue;
+          if (canPlace(block, x, y)) return { x, y };
+        }
+      }
+    }
+    return findEmptyCell(block.w, block.h);
+  }
+
+  function highlightSnapTarget(other) {
+    clearSnapHighlight();
+    const el = els.boardCanvas.querySelector(`[data-slot-key="${other.slotKey}"]`);
+    if (el) el.classList.add('board-block--snap-target');
+  }
+
+  function clearSnapHighlight() {
+    els.boardCanvas.querySelectorAll('.board-block--snap-target').forEach((el) => {
+      el.classList.remove('board-block--snap-target');
+    });
+  }
+
+  function highlightMergeTarget(other) {
+    clearMergeHighlight();
+    const el = els.boardCanvas.querySelector(`[data-slot-key="${other.slotKey}"]`);
+    if (el) el.classList.add('board-block--merge-target');
+  }
+
+  function clearMergeHighlight() {
+    els.boardCanvas.querySelectorAll('.board-block--merge-target').forEach((el) => {
+      el.classList.remove('board-block--merge-target');
+    });
+  }
+
+  async function mergeBlocksAt(moving, other, rect) {
+    moving.x = rect.x;
+    moving.y = rect.y;
+    moving.w = rect.w;
+    moving.h = rect.h;
+
+    const primaryShelf = state.shelfMap[moving.slotKey];
+    const secondaryShelf = state.shelfMap[other.slotKey];
+    if (primaryShelf && secondaryShelf) {
+      await DB.mergeShelvesInto(primaryShelf.id, secondaryShelf.id);
+    }
+
+    state.board.blocks = state.board.blocks.filter((b) => b.slotKey !== other.slotKey);
+    await saveBoard();
+  }
+
+  async function saveBoard() {
+    state.board.version += 1;
+    await DB.setBoardLayout(state.board);
+    await DB.syncShelvesFromBoard(state.board);
+  }
+
+  async function addShelfBlock() {
+    const nextNum = state.board.blocks.length + 1;
+    const pos = findEmptyCell(1, 1);
+    const block = {
+      slotKey: `b-${Date.now()}`,
+      defaultName: String(nextNum),
+      x: pos.x,
+      y: pos.y,
+      w: 1,
+      h: 1,
+    };
+    state.board.blocks.push(block);
+    await saveBoard();
+    await refresh();
+    renderBoard();
   }
 
   async function confirmDeleteShelf() {
     const slotKey = state.pendingDeleteSlotKey;
     els.deleteShelfDialog.hidden = true;
     state.pendingDeleteSlotKey = null;
-    if (!slotKey || state.grid.blocks.length <= 1) return;
+    if (!slotKey) return;
 
-    state.grid.blocks = state.grid.blocks.filter((b) => b.slotKey !== slotKey);
-    state.grid.version += 1;
-    await DB.setGridLayout(state.grid);
-    await DB.syncShelvesFromGrid(state.grid);
+    state.board.blocks = state.board.blocks.filter((b) => b.slotKey !== slotKey);
+    await saveBoard();
+    clearSelection();
     await refresh();
-    renderGrid();
+    renderBoard();
   }
 
   function updateShelfCells() {
-    document.querySelectorAll('.shelf-cell[data-slot-key]').forEach((el) => {
+    document.querySelectorAll('.board-block[data-slot-key]').forEach((el) => {
       const slotKey = el.dataset.slotKey;
       const shelf = state.shelfMap[slotKey];
       if (!shelf) return;
@@ -410,6 +832,7 @@
     shelf.checked = els.shelfChecked.checked;
     await DB.updateShelf(shelf);
     await refresh();
+    updateShelfCells();
   }
 
   async function handlePhotoUpload(e) {
@@ -452,13 +875,13 @@
       showNameDialog('棚の名称を変更', shelf.name, async (name) => {
         if (!name || name === shelf.name) return;
         shelf.name = name;
-        const block = state.grid.blocks.find((b) => b.slotKey === shelf.slotKey);
+        const block = state.board.blocks.find((b) => b.slotKey === shelf.slotKey);
         if (block) block.defaultName = name;
         await DB.updateShelf(shelf);
-        await DB.setGridLayout(state.grid);
+        await saveBoard();
         els.folderTitle.textContent = name;
         await refresh();
-        renderGrid();
+        updateShelfCells();
       });
     });
   }
@@ -680,7 +1103,7 @@
     await DB.resetAll();
     closeFolder();
     await refresh();
-    renderGrid();
+    updateShelfCells();
   }
 
   function escapeHtml(str) {

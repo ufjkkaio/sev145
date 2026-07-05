@@ -1,15 +1,15 @@
-const CACHE_NAME = 'shelf-cleaning-v29';
+const CACHE_NAME = 'shelf-cleaning-v30';
 const ASSETS = [
   './',
   './index.html',
-  './css/app.css?v=29',
-  './js/layout-template.js?v=29',
-  './js/db.js?v=29',
-  './js/app.js?v=29',
+  './css/app.css?v=30',
+  './js/layout-template.js?v=30',
+  './js/db.js?v=30',
+  './js/app.js?v=30',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './sw.js?v=29',
+  './sw.js?v=30',
 ];
 
 self.addEventListener('install', (e) => {

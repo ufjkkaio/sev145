@@ -1,7 +1,5 @@
 const DB_NAME = 'shelf-cleaning-grid';
 const DB_VERSION = 1;
-const DEFAULT_COLS = 4;
-const DEFAULT_BLOCK_COUNT = 12;
 
 let db = null;
 
@@ -60,24 +58,44 @@ async function setConfig(key, value) {
   return promisifyRequest(store.put({ key, value }));
 }
 
-function createDefaultGrid() {
+function createDefaultBoard() {
+  return { version: 2, blocks: [] };
+}
+
+function migrateToBoard(data) {
+  if (!data) return createDefaultBoard();
+  if (data.blocks?.[0]?.x !== undefined) return data;
+
+  const cols = data.cols || 4;
   return {
-    version: 1,
-    cols: DEFAULT_COLS,
-    blocks: Array.from({ length: DEFAULT_BLOCK_COUNT }, (_, i) => ({
-      slotKey: `g-${i + 1}`,
-      defaultName: String(i + 1),
+    version: 2,
+    blocks: (data.blocks || []).map((b, i) => ({
+      slotKey: b.slotKey,
+      defaultName: b.defaultName,
+      x: i % cols,
+      y: Math.floor(i / cols),
+      w: 1,
+      h: 1,
     })),
   };
 }
 
-async function getGridLayout() {
-  const row = await getConfig('gridLayout');
-  return row ? row.value : createDefaultGrid();
+async function getBoardLayout() {
+  const row = await getConfig('boardLayout');
+  if (row) return migrateToBoard(row.value);
+
+  const legacy = await getConfig('gridLayout');
+  if (legacy) {
+    const board = migrateToBoard(legacy.value);
+    await setBoardLayout(board);
+    return board;
+  }
+
+  return createDefaultBoard();
 }
 
-async function setGridLayout(layout) {
-  return setConfig('gridLayout', layout);
+async function setBoardLayout(layout) {
+  return setConfig('boardLayout', layout);
 }
 
 async function getStoreName() {
@@ -126,6 +144,16 @@ async function deleteShelf(id) {
   }
 }
 
+async function mergeShelvesInto(primaryId, secondaryId) {
+  const photos = await getPhotosByShelf(secondaryId);
+  for (const photo of photos) {
+    photo.shelfId = primaryId;
+    await updatePhoto(photo);
+  }
+  const store = await tx('shelves', 'readwrite');
+  await promisifyRequest(store.delete(secondaryId));
+}
+
 async function getPhotosByShelf(shelfId) {
   const store = await tx('photos');
   const index = store.index('shelfId');
@@ -157,9 +185,9 @@ async function getPhoto(id) {
   return promisifyRequest(store.get(id));
 }
 
-async function syncShelvesFromGrid(grid) {
+async function syncShelvesFromBoard(board) {
   const existing = await getAllShelves();
-  const slotKeys = new Set(grid.blocks.map((b) => b.slotKey));
+  const slotKeys = new Set(board.blocks.map((b) => b.slotKey));
 
   for (const shelf of existing) {
     if (!slotKeys.has(shelf.slotKey)) {
@@ -167,7 +195,7 @@ async function syncShelvesFromGrid(grid) {
     }
   }
 
-  for (const block of grid.blocks) {
+  for (const block of board.blocks) {
     const shelf = await getShelfBySlotKey(block.slotKey);
     if (!shelf) {
       await addShelf({
@@ -226,9 +254,8 @@ async function getPhotoCounts() {
 }
 
 window.DB = {
-  DEFAULT_COLS,
-  getGridLayout,
-  setGridLayout,
+  getBoardLayout,
+  setBoardLayout,
   getStoreName,
   setStoreName,
   getAllShelves,
@@ -237,12 +264,13 @@ window.DB = {
   addShelf,
   updateShelf,
   deleteShelf,
+  mergeShelvesInto,
   getPhotosByShelf,
   addPhoto,
   updatePhoto,
   deletePhoto,
   getPhoto,
-  syncShelvesFromGrid,
+  syncShelvesFromBoard,
   resetAll,
   getPhotoCounts,
 };

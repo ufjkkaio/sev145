@@ -1,41 +1,8 @@
-/* 正方形グリッド用の追加スタイル（共通UIは ../css/app.css） */
-
-.grid-layout {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  grid-template-columns: repeat(var(--cols, 4), 1fr);
-}
-
-.grid-layout .shelf-cell {
-  aspect-ratio: 1;
-  min-height: 72px;
-}
-
-.grid-layout .shelf-cell__label {
-  font-size: 0.95rem;
-}
-
-.btn-add-shelf {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 72px;
-  border: 2px dashed var(--color-border, #ccc);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--color-primary, #1a5f2a);
-  font-size: 2rem;
-  cursor: pointer;
-}
-
-.layout-edit-mode .shelf-cell {
-  outline: 2px dashed rgba(26, 95, 42, 0.35);
-}
+/* ホワイトボード風レイアウト（共通UIは ../css/app.css） */
 
 .header__store-name {
   font-size: 0.85rem;
-  color: var(--color-muted, #666);
+  color: rgba(255, 255, 255, 0.85);
   margin: 0;
 }
 
@@ -60,4 +27,141 @@
 .header__actions .btn {
   font-size: 0.8rem;
   padding: 6px 10px;
+}
+
+.map-area--whiteboard {
+  background: #f4f6f8;
+  padding: 0;
+}
+
+.whiteboard {
+  min-height: 100%;
+  min-width: 100%;
+  padding: 16px;
+  padding-bottom: calc(80px + var(--safe-bottom, 0px));
+  box-sizing: border-box;
+  background-color: #fafbfc;
+  background-image:
+    linear-gradient(#e3e7eb 1px, transparent 1px),
+    linear-gradient(90deg, #e3e7eb 1px, transparent 1px);
+  background-size: 78px 78px;
+  background-position: 16px 16px;
+}
+
+.whiteboard__canvas {
+  position: relative;
+  min-width: 320px;
+  min-height: 480px;
+}
+
+.board-block {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 2px solid #c5d0c8;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.board-block .shelf-cell__label {
+  font-size: clamp(0.75rem, 3.5vw, 1rem);
+  font-weight: 600;
+  color: #1a3d24;
+  text-align: center;
+  padding: 4px;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.board-block .shelf-cell__badge {
+  top: 4px;
+  right: 4px;
+}
+
+.board-block.shelf-cell--done {
+  background: #e8f5e9;
+  border-color: #4caf50;
+}
+
+.board-block.shelf-cell--has-photos {
+  border-color: #81c784;
+}
+
+.layout-edit-mode .board-block {
+  border-style: dashed;
+  border-color: #1a5f2a;
+  cursor: grab;
+}
+
+.layout-edit-mode .board-block.board-block--dragging {
+  cursor: grabbing;
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  opacity: 0.95;
+}
+
+.layout-edit-mode .board-block.board-block--snap-target {
+  border-color: #2196f3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.35);
+}
+
+.layout-edit-mode .board-block.board-block--merge-target {
+  border-color: #ff9800;
+  box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.45);
+}
+
+.layout-edit-mode .board-block.board-block--selected {
+  border-color: #1565c0;
+  border-style: solid;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.35);
+  z-index: 10;
+}
+
+.layout-edit-mode .board-block.board-block--dragging.board-block--merging {
+  border-color: #ff9800;
+  background: #fff8e1;
+}
+
+.header__actions .btn--danger {
+  font-size: 0.8rem;
+  padding: 6px 10px;
+}
+
+.fab-add-shelf {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + var(--safe-bottom, 0px));
+  z-index: 200;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-primary, #1a5f2a);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(26, 95, 42, 0.4);
+  touch-action: manipulation;
+}
+
+.fab-add-shelf:active {
+  transform: scale(0.97);
+}
+
+.whiteboard-empty {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  color: #8a939c;
+  font-size: 0.9rem;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
 }
