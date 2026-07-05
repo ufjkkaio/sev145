@@ -11,14 +11,16 @@
   <title>棚清掃</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="../icons/icon-192.png">
-  <link rel="stylesheet" href="../css/app.css?v=32">
-  <link rel="stylesheet" href="css/simple.css?v=32">
+  <link rel="stylesheet" href="../css/app.css?v=33">
+  <link rel="stylesheet" href="css/simple.css?v=33">
 </head>
 <body>
   <div id="app">
     <header class="header">
       <div class="header__lead">
-        <p id="header-store-name" class="header__store-name">店舗名</p>
+        <button type="button" id="btn-store-name" class="header__store-btn" aria-label="店舗名を変更">
+          <span id="header-store-name" class="header__store-name">店舗名</span>
+        </button>
         <h1 class="header__title">棚清掃</h1>
       </div>
       <div class="header__actions">
@@ -34,6 +36,11 @@
         <div id="board-canvas" class="whiteboard__canvas"></div>
       </div>
       <button type="button" id="btn-add-shelf" class="fab-add-shelf" hidden>棚を追加</button>
+      <div class="zoom-controls" id="zoom-controls">
+        <button type="button" id="btn-zoom-out" class="zoom-controls__btn" aria-label="縮小">−</button>
+        <span id="zoom-label" class="zoom-controls__label">100%</span>
+        <button type="button" id="btn-zoom-in" class="zoom-controls__btn" aria-label="拡大">＋</button>
+      </div>
     </main>
 
     <div id="edit-hint" class="edit-hint" hidden>棚をタップして名称を変更</div>
@@ -155,7 +162,7 @@
     </div>
   </div>
 
-  <script src="js/db.js?v=32"></script>
-  <script src="js/app.js?v=32"></script>
+  <script src="js/db.js?v=33"></script>
+  <script src="js/app.js?v=33"></script>
 </body>
 </html>

@@ -16,8 +16,12 @@
   const SWIPE_RESIZE = 22;
   const SNAP_DIST = 32;
   const MAX_BLOCK_CELLS = 16;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 1.5;
+  const ZOOM_STEP = 0.1;
 
   const els = {
+    btnStoreName: $('#btn-store-name'),
     headerStoreName: $('#header-store-name'),
     btnLayoutEdit: $('#btn-layout-edit'),
     btnEditMode: $('#btn-edit-mode'),
@@ -26,6 +30,9 @@
     btnDeleteSelected: $('#btn-delete-selected'),
     boardCanvas: $('#board-canvas'),
     mapArea: $('#map-area'),
+    btnZoomIn: $('#btn-zoom-in'),
+    btnZoomOut: $('#btn-zoom-out'),
+    zoomLabel: $('#zoom-label'),
     editHint: $('#edit-hint'),
     layoutHint: $('#layout-hint'),
     folderOverlay: $('#folder-overlay'),
@@ -78,6 +85,7 @@
     nameDialogCallback: null,
     pendingDeleteSlotKey: null,
     selectedSlotKey: null,
+    boardZoom: 1,
     metrics: null,
     drag: null,
     editor: {
@@ -96,6 +104,7 @@
     registerServiceWorker();
     bindEvents();
     state.board = await DB.getBoardLayout();
+    state.boardZoom = await DB.getBoardZoom();
     await DB.syncShelvesFromBoard(state.board);
     updateHeader();
     await refresh();
@@ -108,7 +117,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=32').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=33').catch(() => {});
     }
   }
 
@@ -195,14 +204,74 @@
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => renderBoard(), 150);
     });
+
+    bindZoomEvents();
+    els.btnStoreName.addEventListener('click', openStoreNameDialog);
+  }
+
+  function bindZoomEvents() {
+    els.btnZoomIn.addEventListener('click', () => applyBoardZoom(state.boardZoom + ZOOM_STEP));
+    els.btnZoomOut.addEventListener('click', () => applyBoardZoom(state.boardZoom - ZOOM_STEP));
+
+    let pinch = null;
+
+    els.mapArea.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 2) return;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinch = {
+        startDist: Math.hypot(dx, dy),
+        startZoom: state.boardZoom,
+      };
+    }, { passive: true });
+
+    els.mapArea.addEventListener('touchmove', (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (pinch.startDist < 1) return;
+      applyBoardZoom(pinch.startZoom * (dist / pinch.startDist), false);
+      e.preventDefault();
+    }, { passive: false });
+
+    const endPinch = () => {
+      if (!pinch) return;
+      pinch = null;
+      DB.setBoardZoom(state.boardZoom);
+    };
+    els.mapArea.addEventListener('touchend', endPinch);
+    els.mapArea.addEventListener('touchcancel', endPinch);
+  }
+
+  async function applyBoardZoom(zoom, save = true) {
+    state.boardZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
+    if (els.zoomLabel) {
+      els.zoomLabel.textContent = `${Math.round(state.boardZoom * 100)}%`;
+    }
+    if (save) await DB.setBoardZoom(state.boardZoom);
+    renderBoard();
+  }
+
+  function openStoreNameDialog() {
+    DB.getStoreName().then((name) => {
+      showNameDialog('店舗名を変更', name || '', async (newName) => {
+        if (!newName) return;
+        await DB.setStoreName(newName);
+        updateHeader();
+      }, 20);
+    });
   }
 
   function computeMetrics() {
     const w = els.mapArea ? els.mapArea.clientWidth : window.innerWidth;
     const inner = Math.max(280, w - PAD * 2);
     const cell = Math.floor((inner - GAP * (VISIBLE_COLS - 1)) / VISIBLE_COLS);
-    const clamped = Math.max(MIN_CELL, Math.min(MAX_CELL, cell));
-    return { cell: clamped, gap: GAP, step: clamped + GAP, pad: PAD };
+    const base = Math.max(MIN_CELL, Math.min(MAX_CELL, cell));
+    const zoom = state.boardZoom || 1;
+    const scaled = Math.max(28, Math.round(base * zoom));
+    const gap = Math.max(2, Math.round(GAP * zoom));
+    return { cell: scaled, gap, step: scaled + gap, pad: PAD, zoom };
   }
 
   function m() {
@@ -286,11 +355,14 @@
 
   function renderBoard() {
     state.metrics = computeMetrics();
-    const { step } = m();
+    const { step, gap } = m();
     const whiteboard = document.querySelector('.whiteboard');
     if (whiteboard) {
       whiteboard.style.backgroundSize = `${step}px ${step}px`;
       whiteboard.style.backgroundPosition = `${PAD}px ${PAD}px`;
+    }
+    if (els.zoomLabel) {
+      els.zoomLabel.textContent = `${Math.round((state.boardZoom || 1) * 100)}%`;
     }
 
     const root = els.boardCanvas;
@@ -1123,9 +1195,10 @@
     });
   }
 
-  function showNameDialog(title, defaultValue, callback) {
+  function showNameDialog(title, defaultValue, callback, maxLength = 30) {
     els.nameDialogTitle.textContent = title;
     els.shelfNameInput.value = defaultValue;
+    els.shelfNameInput.maxLength = maxLength;
     state.nameDialogCallback = callback;
     els.nameDialog.hidden = false;
     setTimeout(() => { els.shelfNameInput.focus(); els.shelfNameInput.select(); }, 100);

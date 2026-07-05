@@ -2,8 +2,27 @@
 
 .header__store-name {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.92);
   margin: 0;
+  font-weight: 700;
+}
+
+.header__store-btn {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  text-align: left;
+}
+
+.header__store-btn:active {
+  opacity: 0.75;
 }
 
 .header__lead {
@@ -159,6 +178,44 @@
 
 .fab-add-shelf:active {
   transform: scale(0.97);
+}
+
+.zoom-controls {
+  position: fixed;
+  left: 12px;
+  bottom: calc(16px + var(--safe-bottom, 0px));
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.zoom-controls__btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-primary, #1a5f2a);
+  color: #fff;
+  font-size: 1.4rem;
+  line-height: 1;
+  touch-action: manipulation;
+}
+
+.zoom-controls__btn:active {
+  transform: scale(0.94);
+}
+
+.zoom-controls__label {
+  min-width: 44px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #333;
 }
 
 .whiteboard-empty {

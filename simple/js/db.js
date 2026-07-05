@@ -107,6 +107,15 @@ async function setStoreName(name) {
   return setConfig('storeName', name);
 }
 
+async function getBoardZoom() {
+  const row = await getConfig('boardZoom');
+  return row ? row.value : 1;
+}
+
+async function setBoardZoom(zoom) {
+  return setConfig('boardZoom', zoom);
+}
+
 async function getAllShelves() {
   const store = await tx('shelves');
   return promisifyRequest(store.getAll());
@@ -258,6 +267,8 @@ window.DB = {
   setBoardLayout,
   getStoreName,
   setStoreName,
+  getBoardZoom,
+  setBoardZoom,
   getAllShelves,
   getShelf,
   getShelfBySlotKey,
