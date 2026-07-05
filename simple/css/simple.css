@@ -37,21 +37,22 @@
 .whiteboard {
   min-height: 100%;
   min-width: 100%;
-  padding: 16px;
-  padding-bottom: calc(80px + var(--safe-bottom, 0px));
+  padding: 10px;
+  padding-bottom: calc(72px + var(--safe-bottom, 0px));
   box-sizing: border-box;
   background-color: #fafbfc;
   background-image:
     linear-gradient(#e3e7eb 1px, transparent 1px),
     linear-gradient(90deg, #e3e7eb 1px, transparent 1px);
-  background-size: 78px 78px;
-  background-position: 16px 16px;
+  background-size: 66px 66px;
+  background-position: 10px 10px;
 }
 
 .whiteboard__canvas {
   position: relative;
-  min-width: 320px;
-  min-height: 480px;
+  width: 100%;
+  max-width: 100%;
+  min-height: 200px;
 }
 
 .board-block {
@@ -122,6 +123,12 @@
   border-style: solid;
   box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.35);
   z-index: 10;
+  cursor: default;
+}
+
+.layout-edit-mode .board-block.board-block--resize-hint {
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.55);
+  border-color: #43a047;
 }
 
 .layout-edit-mode .board-block.board-block--dragging.board-block--merging {

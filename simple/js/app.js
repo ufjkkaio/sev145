@@ -7,13 +7,14 @@
   const PEN_COLOR = '#e53935';
   const PEN_SIZE = 6;
 
-  const CELL = 72;
-  const GAP = 6;
-  const STEP = CELL + GAP;
-  const PAD = 16;
+  const GAP = 4;
+  const PAD = 10;
+  const VISIBLE_COLS = 5;
+  const MAX_CELL = 62;
+  const MIN_CELL = 50;
   const TAP_THRESHOLD = 8;
-  const SWIPE_RESIZE = 36;
-  const SNAP_DIST = 36;
+  const SWIPE_RESIZE = 22;
+  const SNAP_DIST = 32;
   const MAX_BLOCK_CELLS = 16;
 
   const els = {
@@ -24,6 +25,7 @@
     btnAddShelf: $('#btn-add-shelf'),
     btnDeleteSelected: $('#btn-delete-selected'),
     boardCanvas: $('#board-canvas'),
+    mapArea: $('#map-area'),
     editHint: $('#edit-hint'),
     layoutHint: $('#layout-hint'),
     folderOverlay: $('#folder-overlay'),
@@ -76,6 +78,7 @@
     nameDialogCallback: null,
     pendingDeleteSlotKey: null,
     selectedSlotKey: null,
+    metrics: null,
     drag: null,
     editor: {
       open: false,
@@ -105,7 +108,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=6').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=7').catch(() => {});
     }
   }
 
@@ -186,6 +189,24 @@
     els.editorCanvas.addEventListener('pointermove', onEditorPointerMove);
     els.editorCanvas.addEventListener('pointerup', onEditorPointerUp);
     els.editorCanvas.addEventListener('pointercancel', onEditorPointerUp);
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => renderBoard(), 150);
+    });
+  }
+
+  function computeMetrics() {
+    const w = els.mapArea ? els.mapArea.clientWidth : window.innerWidth;
+    const inner = Math.max(280, w - PAD * 2);
+    const cell = Math.floor((inner - GAP * (VISIBLE_COLS - 1)) / VISIBLE_COLS);
+    const clamped = Math.max(MIN_CELL, Math.min(MAX_CELL, cell));
+    return { cell: clamped, gap: GAP, step: clamped + GAP, pad: PAD };
+  }
+
+  function m() {
+    return state.metrics || computeMetrics();
   }
 
   async function handleStoreSetup() {
@@ -240,28 +261,38 @@
   }
 
   function blockPx(block) {
+    const { cell, gap, step, pad } = m();
     return {
-      left: PAD + block.x * STEP,
-      top: PAD + block.y * STEP,
-      width: block.w * CELL + (block.w - 1) * GAP,
-      height: block.h * CELL + (block.h - 1) * GAP,
+      left: pad + block.x * step,
+      top: pad + block.y * step,
+      width: block.w * cell + (block.w - 1) * gap,
+      height: block.h * cell + (block.h - 1) * gap,
     };
   }
 
   function boardSize() {
-    let maxX = 4;
-    let maxY = 6;
+    const { step, pad } = m();
+    let maxX = VISIBLE_COLS;
+    let maxY = 5;
     for (const b of state.board.blocks) {
       maxX = Math.max(maxX, b.x + b.w + 1);
       maxY = Math.max(maxY, b.y + b.h + 1);
     }
     return {
-      width: PAD * 2 + maxX * STEP,
-      height: PAD * 2 + maxY * STEP,
+      width: pad * 2 + maxX * step,
+      height: pad * 2 + maxY * step,
     };
   }
 
   function renderBoard() {
+    state.metrics = computeMetrics();
+    const { step } = m();
+    const whiteboard = document.querySelector('.whiteboard');
+    if (whiteboard) {
+      whiteboard.style.backgroundSize = `${step}px ${step}px`;
+      whiteboard.style.backgroundPosition = `${PAD}px ${PAD}px`;
+    }
+
     const root = els.boardCanvas;
     root.innerHTML = '';
     const size = boardSize();
@@ -362,6 +393,15 @@
     const drag = state.drag;
     if (!drag || drag.el !== e.currentTarget) return;
 
+    // 選択中は動かさず、スワイプ伸長だけ受け付ける
+    if (drag.wasSelected) {
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      drag.el.classList.toggle('board-block--resize-hint', Math.hypot(dx, dy) >= SWIPE_RESIZE);
+      e.preventDefault();
+      return;
+    }
+
     const dx = e.clientX - drag.startX;
     const dy = e.clientY - drag.startY;
     if (!drag.repositioning && (Math.abs(dx) > TAP_THRESHOLD || Math.abs(dy) > TAP_THRESHOLD)) {
@@ -415,19 +455,23 @@
 
     drag.el.classList.remove('board-block--dragging');
     drag.el.classList.remove('board-block--merging');
+    drag.el.classList.remove('board-block--resize-hint');
     drag.el.releasePointerCapture(e.pointerId);
     clearSnapHighlight();
     clearMergeHighlight();
 
     const block = getBlock(drag.slotKey);
 
-    if (!drag.repositioning && drag.wasSelected && dist >= SWIPE_RESIZE && block) {
-      const resized = await tryResizeBlock(block, dx, dy);
-      state.drag = null;
-      if (resized) {
+    if (drag.wasSelected) {
+      if (dist >= SWIPE_RESIZE && block) {
+        await tryResizeBlock(block, dx, dy);
         await refresh();
         renderBoard();
+      } else {
+        clearSelection();
+        updateSelectionUI();
       }
+      state.drag = null;
       return;
     }
 
@@ -543,8 +587,9 @@
   }
 
   function resolveDrop(block, relLeft, relTop) {
-    const gx = Math.round((relLeft - PAD) / STEP);
-    const gy = Math.round((relTop - PAD) / STEP);
+    const { pad, step } = m();
+    const gx = Math.round((relLeft - pad) / step);
+    const gy = Math.round((relTop - pad) / step);
     const placed = { ...block, x: gx, y: gy };
 
     for (const other of state.board.blocks) {
@@ -567,9 +612,10 @@
   }
 
   function findBestSnapPosition(block, relLeft, relTop) {
+    const { pad, step } = m();
     const candidates = [];
-    const gx = Math.round((relLeft - PAD) / STEP);
-    const gy = Math.round((relTop - PAD) / STEP);
+    const gx = Math.round((relLeft - pad) / step);
+    const gy = Math.round((relTop - pad) / step);
 
     if (canPlace(block, gx, gy)) {
       const px = blockPx({ ...block, x: gx, y: gy });
@@ -593,7 +639,7 @@
         if (!canPlace(block, pos.x, pos.y)) continue;
         const px = blockPx({ ...block, ...pos });
         const dist = Math.hypot(relLeft - px.left, relTop - px.top);
-        if (dist <= SNAP_DIST + STEP) {
+        if (dist <= SNAP_DIST + step) {
           candidates.push({ x: pos.x, y: pos.y, dist, nearOther: other });
         }
       }
