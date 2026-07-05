@@ -393,6 +393,8 @@
     hideDeleteConfirm();
     state.viewingPhotoId = null;
     els.viewerImage.removeAttribute('src');
+    els.viewerAuthorInput.value = '';
+    els.viewerAuthorInput.readOnly = false;
   }
 
   function showDeleteConfirm() {
@@ -428,16 +430,26 @@
 
     state.viewingPhotoId = photoId;
     els.viewerImage.src = getPhotoObjectUrl(photoId, photo.blob);
-    els.viewerAuthorInput.value = photo.author || '';
     hideDeleteConfirm();
     els.photoViewer.hidden = false;
 
     const last = localStorage.getItem(LAST_AUTHOR_KEY);
+    const author = photo.author || '';
+    els.viewerAuthorInput.value = '';
     els.viewerAuthorInput.placeholder = last ? `例：${last}` : '例：夜勤 山田';
 
-    requestAnimationFrame(() => {
-      if (!photo.author) els.viewerAuthorInput.focus();
-    });
+    if (author) {
+      els.viewerAuthorInput.readOnly = false;
+      els.viewerAuthorInput.value = author;
+    } else {
+      // iOSが前回入力を自動入力するのを防ぐ
+      els.viewerAuthorInput.readOnly = true;
+      requestAnimationFrame(() => {
+        if (state.viewingPhotoId !== photoId) return;
+        els.viewerAuthorInput.readOnly = false;
+        els.viewerAuthorInput.focus();
+      });
+    }
   }
 
   function handleRenameShelf() {
