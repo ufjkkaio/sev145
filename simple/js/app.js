@@ -91,6 +91,7 @@
     metrics: null,
     drag: null,
     pan: null,
+    shelfTap: null,
     editor: {
       open: false,
       isDrawing: false,
@@ -543,10 +544,35 @@
       el.addEventListener('pointerup', onBlockPointerUp);
       el.addEventListener('pointercancel', onBlockPointerUp);
     } else {
-      el.addEventListener('click', () => onShelfTap(block));
+      el.addEventListener('pointerdown', (e) => onShelfPointerDown(e, block));
+      el.addEventListener('pointerup', onShelfPointerUp);
+      el.addEventListener('pointercancel', onShelfPointerCancel);
     }
 
     return el;
+  }
+
+  function onShelfPointerDown(e, block) {
+    if (e.button > 0) return;
+    e.stopPropagation();
+    state.shelfTap = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      block,
+    };
+  }
+
+  function onShelfPointerUp(e) {
+    const tap = state.shelfTap;
+    if (!tap || tap.pointerId !== e.pointerId) return;
+    state.shelfTap = null;
+    const dist = Math.hypot(e.clientX - tap.startX, e.clientY - tap.startY);
+    if (dist < TAP_THRESHOLD) onShelfTap(tap.block);
+  }
+
+  function onShelfPointerCancel() {
+    state.shelfTap = null;
   }
 
   function onShelfTap(block) {
