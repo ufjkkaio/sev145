@@ -608,6 +608,12 @@ body {
   font-size: 8px;
 }
 
+.photo-add-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .photo-add {
   display: block;
   cursor: pointer;
@@ -619,7 +625,8 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 24px;
+  padding: 20px 12px;
+  min-height: 96px;
   border: 2px dashed var(--color-border);
   border-radius: var(--radius);
   color: var(--color-text-muted);

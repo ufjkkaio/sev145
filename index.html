@@ -11,7 +11,7 @@
   <title>店内棚 清掃管理</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/app.css?v=21">
+  <link rel="stylesheet" href="css/app.css?v=22">
 </head>
 <body>
   <div id="app">
@@ -52,13 +52,22 @@
 
         <div class="folder__content">
           <div id="photo-grid" class="photo-grid"></div>
-          <label class="photo-add">
-            <input type="file" id="photo-input" accept="image/*" capture="environment" hidden>
-            <span class="photo-add__inner">
-              <span class="photo-add__icon">📷</span>
-              <span class="photo-add__text">写真を追加</span>
-            </span>
-          </label>
+          <div class="photo-add-row">
+            <label class="photo-add">
+              <input type="file" id="photo-input-camera" accept="image/*" capture="environment" hidden>
+              <span class="photo-add__inner">
+                <span class="photo-add__icon">📷</span>
+                <span class="photo-add__text">撮影する</span>
+              </span>
+            </label>
+            <label class="photo-add">
+              <input type="file" id="photo-input-album" accept="image/*" hidden>
+              <span class="photo-add__inner">
+                <span class="photo-add__icon">🖼️</span>
+                <span class="photo-add__text">アルバムから</span>
+              </span>
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -108,8 +117,8 @@
     </div>
   </div>
 
-  <script src="js/layout-template.js?v=21"></script>
-  <script src="js/db.js?v=21"></script>
-  <script src="js/app.js?v=21"></script>
+  <script src="js/layout-template.js?v=22"></script>
+  <script src="js/db.js?v=22"></script>
+  <script src="js/app.js?v=22"></script>
 </body>
 </html>

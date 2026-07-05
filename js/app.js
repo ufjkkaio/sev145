@@ -18,7 +18,8 @@
     btnRenameShelf: $('#btn-rename-shelf'),
     shelfChecked: $('#shelf-checked'),
     photoGrid: $('#photo-grid'),
-    photoInput: $('#photo-input'),
+    photoInputCamera: $('#photo-input-camera'),
+    photoInputAlbum: $('#photo-input-album'),
     nameDialog: $('#name-dialog'),
     nameDialogTitle: $('#name-dialog-title'),
     shelfNameInput: $('#shelf-name-input'),
@@ -58,7 +59,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=21').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=22').catch(() => {});
     }
   }
 
@@ -95,7 +96,8 @@
     });
 
     els.shelfChecked.addEventListener('change', handleCheckChange);
-    els.photoInput.addEventListener('change', handlePhotoUpload);
+    els.photoInputCamera.addEventListener('change', handlePhotoUpload);
+    els.photoInputAlbum.addEventListener('change', handlePhotoUpload);
     els.btnRenameShelf.addEventListener('click', handleRenameShelf);
 
     els.btnNameCancel.addEventListener('click', closeNameDialog);
