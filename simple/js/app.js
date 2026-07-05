@@ -16,9 +16,8 @@
   const SWIPE_RESIZE = 22;
   const SNAP_DIST = 32;
   const MAX_BLOCK_CELLS = 16;
-  const ZOOM_MIN = 0.5;
-  const ZOOM_MAX = 1.5;
-  const ZOOM_STEP = 0.1;
+  const VIEW_SCALE_MIN = 0.25;
+  const VIEW_SCALE_MAX = 3;
 
   const els = {
     btnStoreName: $('#btn-store-name'),
@@ -29,6 +28,7 @@
     btnAddShelf: $('#btn-add-shelf'),
     btnDeleteSelected: $('#btn-delete-selected'),
     boardCanvas: $('#board-canvas'),
+    boardTransform: $('#board-transform'),
     mapArea: $('#map-area'),
     btnZoomIn: $('#btn-zoom-in'),
     btnZoomOut: $('#btn-zoom-out'),
@@ -85,9 +85,10 @@
     nameDialogCallback: null,
     pendingDeleteSlotKey: null,
     selectedSlotKey: null,
-    boardZoom: 1,
+    view: { scale: 1, x: 0, y: 0 },
     metrics: null,
     drag: null,
+    pan: null,
     editor: {
       open: false,
       isDrawing: false,
@@ -104,7 +105,7 @@
     registerServiceWorker();
     bindEvents();
     state.board = await DB.getBoardLayout();
-    state.boardZoom = await DB.getBoardZoom();
+    state.view = await DB.getBoardView();
     await DB.syncShelvesFromBoard(state.board);
     updateHeader();
     await refresh();
@@ -117,7 +118,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=33').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=34').catch(() => {});
     }
   }
 
@@ -205,52 +206,150 @@
       resizeTimer = setTimeout(() => renderBoard(), 150);
     });
 
-    bindZoomEvents();
+    bindViewportEvents();
     els.btnStoreName.addEventListener('click', openStoreNameDialog);
   }
 
-  function bindZoomEvents() {
-    els.btnZoomIn.addEventListener('click', () => applyBoardZoom(state.boardZoom + ZOOM_STEP));
-    els.btnZoomOut.addEventListener('click', () => applyBoardZoom(state.boardZoom - ZOOM_STEP));
+  function clampScale(scale) {
+    return Math.max(VIEW_SCALE_MIN, Math.min(VIEW_SCALE_MAX, scale));
+  }
+
+  function screenToBoard(clientX, clientY) {
+    const mapRect = els.mapArea.getBoundingClientRect();
+    const v = state.view;
+    return {
+      x: (clientX - mapRect.left - v.x) / v.scale,
+      y: (clientY - mapRect.top - v.y) / v.scale,
+    };
+  }
+
+  function applyViewTransform(save = false) {
+    if (!els.boardTransform) return;
+    const v = state.view;
+    els.boardTransform.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.scale})`;
+    if (els.zoomLabel) {
+      els.zoomLabel.textContent = `${Math.round(v.scale * 100)}%`;
+    }
+    if (save) DB.setBoardView({ ...v });
+  }
+
+  function zoomAtScreen(clientX, clientY, newScale, save = false) {
+    const mapRect = els.mapArea.getBoundingClientRect();
+    const fx = clientX - mapRect.left;
+    const fy = clientY - mapRect.top;
+    const next = clampScale(newScale);
+    const ratio = next / state.view.scale;
+    state.view.x = fx - (fx - state.view.x) * ratio;
+    state.view.y = fy - (fy - state.view.y) * ratio;
+    state.view.scale = next;
+    applyViewTransform(save);
+  }
+
+  function bindViewportEvents() {
+    const mapCenter = () => {
+      const r = els.mapArea.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+
+    els.btnZoomIn.addEventListener('click', () => {
+      const c = mapCenter();
+      zoomAtScreen(c.x, c.y, state.view.scale * 1.2, true);
+    });
+    els.btnZoomOut.addEventListener('click', () => {
+      const c = mapCenter();
+      zoomAtScreen(c.x, c.y, state.view.scale / 1.2, true);
+    });
+    els.zoomLabel.addEventListener('click', () => {
+      state.view = { scale: 1, x: 0, y: 0 };
+      applyViewTransform(true);
+    });
 
     let pinch = null;
 
     els.mapArea.addEventListener('touchstart', (e) => {
       if (e.touches.length !== 2) return;
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       pinch = {
         startDist: Math.hypot(dx, dy),
-        startZoom: state.boardZoom,
+        startScale: state.view.scale,
+        startX: state.view.x,
+        startY: state.view.y,
+        lastMidX: mx,
+        lastMidY: my,
+        lastDist: Math.hypot(dx, dy),
       };
-    }, { passive: true });
+      e.preventDefault();
+    }, { passive: false });
 
     els.mapArea.addEventListener('touchmove', (e) => {
       if (!pinch || e.touches.length !== 2) return;
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const dist = Math.hypot(dx, dy);
-      if (pinch.startDist < 1) return;
-      applyBoardZoom(pinch.startZoom * (dist / pinch.startDist), false);
+
+      if (pinch.lastDist > 1) {
+        const scaleFactor = dist / pinch.lastDist;
+        zoomAtScreen(mx, my, state.view.scale * scaleFactor, false);
+      }
+      state.view.x += mx - pinch.lastMidX;
+      state.view.y += my - pinch.lastMidY;
+      applyViewTransform(false);
+
+      pinch.lastMidX = mx;
+      pinch.lastMidY = my;
+      pinch.lastDist = dist;
       e.preventDefault();
     }, { passive: false });
 
     const endPinch = () => {
       if (!pinch) return;
       pinch = null;
-      DB.setBoardZoom(state.boardZoom);
+      DB.setBoardView({ ...state.view });
     };
     els.mapArea.addEventListener('touchend', endPinch);
     els.mapArea.addEventListener('touchcancel', endPinch);
-  }
 
-  async function applyBoardZoom(zoom, save = true) {
-    state.boardZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
-    if (els.zoomLabel) {
-      els.zoomLabel.textContent = `${Math.round(state.boardZoom * 100)}%`;
-    }
-    if (save) await DB.setBoardZoom(state.boardZoom);
-    renderBoard();
+    els.mapArea.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.board-block')) return;
+      if (e.button > 0) return;
+      state.pan = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        viewX: state.view.x,
+        viewY: state.view.y,
+        moved: false,
+      };
+      els.mapArea.setPointerCapture(e.pointerId);
+    });
+
+    els.mapArea.addEventListener('pointermove', (e) => {
+      if (!state.pan || state.pan.pointerId !== e.pointerId) return;
+      const dx = e.clientX - state.pan.startX;
+      const dy = e.clientY - state.pan.startY;
+      if (Math.abs(dx) > TAP_THRESHOLD || Math.abs(dy) > TAP_THRESHOLD) {
+        state.pan.moved = true;
+      }
+      state.view.x = state.pan.viewX + dx;
+      state.view.y = state.pan.viewY + dy;
+      applyViewTransform(false);
+    });
+
+    const endPan = (e) => {
+      if (!state.pan || state.pan.pointerId !== e.pointerId) return;
+      els.mapArea.releasePointerCapture(e.pointerId);
+      if (state.pan.moved) {
+        DB.setBoardView({ ...state.view });
+      }
+      state.pan = null;
+    };
+    els.mapArea.addEventListener('pointerup', endPan);
+    els.mapArea.addEventListener('pointercancel', endPan);
   }
 
   function openStoreNameDialog() {
@@ -267,11 +366,8 @@
     const w = els.mapArea ? els.mapArea.clientWidth : window.innerWidth;
     const inner = Math.max(280, w - PAD * 2);
     const cell = Math.floor((inner - GAP * (VISIBLE_COLS - 1)) / VISIBLE_COLS);
-    const base = Math.max(MIN_CELL, Math.min(MAX_CELL, cell));
-    const zoom = state.boardZoom || 1;
-    const scaled = Math.max(28, Math.round(base * zoom));
-    const gap = Math.max(2, Math.round(GAP * zoom));
-    return { cell: scaled, gap, step: scaled + gap, pad: PAD, zoom };
+    const clamped = Math.max(MIN_CELL, Math.min(MAX_CELL, cell));
+    return { cell: clamped, gap: GAP, step: clamped + GAP, pad: PAD };
   }
 
   function m() {
@@ -361,9 +457,6 @@
       whiteboard.style.backgroundSize = `${step}px ${step}px`;
       whiteboard.style.backgroundPosition = `${PAD}px ${PAD}px`;
     }
-    if (els.zoomLabel) {
-      els.zoomLabel.textContent = `${Math.round((state.boardZoom || 1) * 100)}%`;
-    }
 
     const root = els.boardCanvas;
     root.innerHTML = '';
@@ -385,6 +478,7 @@
     }
     updateShelfCells();
     updateSelectionUI();
+    applyViewTransform(false);
   }
 
   function createBoardBlock(block) {
@@ -446,7 +540,7 @@
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
     const px = blockPx(block);
-    const canvasRect = els.boardCanvas.getBoundingClientRect();
+    const pt = screenToBoard(e.clientX, e.clientY);
     state.drag = {
       slotKey: block.slotKey,
       wasSelected: state.selectedSlotKey === block.slotKey,
@@ -454,8 +548,8 @@
       startY: e.clientY,
       moved: false,
       repositioning: false,
-      offsetX: e.clientX - (canvasRect.left + px.left),
-      offsetY: e.clientY - (canvasRect.top + px.top),
+      offsetBoardX: pt.x - px.left,
+      offsetBoardY: pt.y - px.top,
       el,
     };
     e.preventDefault();
@@ -486,9 +580,9 @@
     const block = getBlock(drag.slotKey);
     if (!block) return;
 
-    const canvasRect = els.boardCanvas.getBoundingClientRect();
-    let left = e.clientX - canvasRect.left - drag.offsetX;
-    let top = e.clientY - canvasRect.top - drag.offsetY;
+    const pt = screenToBoard(e.clientX, e.clientY);
+    let left = pt.x - drag.offsetBoardX;
+    let top = pt.y - drag.offsetBoardY;
 
     const drop = resolveDrop(block, left, top);
     clearSnapHighlight();

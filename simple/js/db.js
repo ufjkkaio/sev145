@@ -107,13 +107,16 @@ async function setStoreName(name) {
   return setConfig('storeName', name);
 }
 
-async function getBoardZoom() {
-  const row = await getConfig('boardZoom');
-  return row ? row.value : 1;
+async function getBoardView() {
+  const row = await getConfig('boardView');
+  if (row) return row.value;
+  const legacy = await getConfig('boardZoom');
+  if (legacy) return { scale: legacy.value, x: 0, y: 0 };
+  return { scale: 1, x: 0, y: 0 };
 }
 
-async function setBoardZoom(zoom) {
-  return setConfig('boardZoom', zoom);
+async function setBoardView(view) {
+  return setConfig('boardView', view);
 }
 
 async function getAllShelves() {
@@ -267,8 +270,8 @@ window.DB = {
   setBoardLayout,
   getStoreName,
   setStoreName,
-  getBoardZoom,
-  setBoardZoom,
+  getBoardView,
+  setBoardView,
   getAllShelves,
   getShelf,
   getShelfBySlotKey,
