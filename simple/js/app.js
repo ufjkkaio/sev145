@@ -34,6 +34,7 @@
     mapArea: $('#map-area'),
     btnZoomIn: $('#btn-zoom-in'),
     btnZoomOut: $('#btn-zoom-out'),
+    btnCenter: $('#btn-center'),
     zoomLabel: $('#zoom-label'),
     editHint: $('#edit-hint'),
     layoutHint: $('#layout-hint'),
@@ -109,10 +110,14 @@
     state.board = await DB.getBoardLayout();
     state.view = await DB.getBoardView();
     state.view.scale = clampScale(state.view.scale ?? 1);
+    const isLegacyTopLeft = state.view.x === 0 && state.view.y === 0;
     await DB.syncShelvesFromBoard(state.board);
     updateHeader();
     await refresh();
     renderBoard();
+    if (isLegacyTopLeft) {
+      centerBoardView({ scale: state.view.scale, save: true });
+    }
     if (!(await DB.getStoreName())) {
       els.storeSetupDialog.hidden = false;
       els.storeNameInput.focus();
@@ -252,6 +257,16 @@
     v.y = Math.max(minY, Math.min(maxY, v.y));
   }
 
+  function centerBoardView({ scale = state.view.scale, save = false } = {}) {
+    const mapW = els.mapArea?.clientWidth || 0;
+    const mapH = els.mapArea?.clientHeight || 0;
+    const s = clampScale(scale);
+    state.view.scale = s;
+    state.view.x = mapW / 2 - (BOARD_WIDTH_PX / 2) * s;
+    state.view.y = mapH / 2 - (BOARD_HEIGHT_PX / 2) * s;
+    applyViewTransform(save);
+  }
+
   function screenToBoard(clientX, clientY) {
     const mapRect = els.mapArea.getBoundingClientRect();
     const v = state.view;
@@ -305,8 +320,10 @@
       zoomAtScreen(c.x, c.y, state.view.scale / 1.2, true);
     });
     els.zoomLabel.addEventListener('click', () => {
-      state.view = { scale: 1, x: 0, y: 0 };
-      applyViewTransform(true);
+      centerBoardView({ scale: 1, save: true });
+    });
+    els.btnCenter.addEventListener('click', () => {
+      centerBoardView({ scale: state.view.scale, save: true });
     });
 
     let pinch = null;
@@ -744,13 +761,21 @@
 
   function findEmptyCell(w = 1, h = 1) {
     const { cols, rows } = boardGridDimensions();
+    const cx = Math.floor(cols / 2);
+    const cy = Math.floor(rows / 2);
+    const candidates = [];
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
-        const probe = { slotKey: '__probe__', x, y, w, h };
-        if (canPlace(probe, x, y)) return { x, y };
+        if (x + w > cols || y + h > rows) continue;
+        candidates.push({ x, y, d: (x - cx) ** 2 + (y - cy) ** 2 });
       }
     }
-    return { x: 0, y: state.board.blocks.length };
+    candidates.sort((a, b) => a.d - b.d || a.y - b.y || a.x - b.x);
+    for (const { x, y } of candidates) {
+      const probe = { slotKey: '__probe__', x, y, w, h };
+      if (canPlace(probe, x, y)) return { x, y };
+    }
+    return { x: cx, y: cy };
   }
 
   function gridRectsOverlap(a, b) {
