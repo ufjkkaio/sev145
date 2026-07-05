@@ -10,8 +10,8 @@
   const GAP = 4;
   const PAD = 10;
   const VISIBLE_COLS = 5;
-  const BOARD_ZOOM_FLOOR = 0.5;
-  const BOARD_MIN_ROWS = 8;
+  const BOARD_WIDTH_PX = 1000;
+  const BOARD_HEIGHT_PX = 1000;
   const MAX_CELL = 62;
   const MIN_CELL = 50;
   const TAP_THRESHOLD = 8;
@@ -454,27 +454,17 @@
   }
 
   function boardGridDimensions() {
-    const mapW = els.mapArea?.clientWidth || window.innerWidth;
-    const mapH = els.mapArea?.clientHeight || window.innerHeight;
     const { step, pad } = m();
-    let cols = Math.ceil((mapW / BOARD_ZOOM_FLOOR - pad * 2) / step);
-    let rows = Math.ceil((mapH / BOARD_ZOOM_FLOOR - pad * 2) / step);
-    for (const b of state.board.blocks) {
-      cols = Math.max(cols, b.x + b.w + 1);
-      rows = Math.max(rows, b.y + b.h + 1);
-    }
-    return {
-      cols: Math.max(VISIBLE_COLS, cols),
-      rows: Math.max(BOARD_MIN_ROWS, rows),
-    };
+    const cols = Math.floor((BOARD_WIDTH_PX - pad * 2) / step);
+    const rows = Math.floor((BOARD_HEIGHT_PX - pad * 2) / step);
+    return { cols, rows };
   }
 
   function boardSize() {
-    const { step, pad } = m();
     const { cols, rows } = boardGridDimensions();
     return {
-      width: pad * 2 + cols * step,
-      height: pad * 2 + rows * step,
+      width: BOARD_WIDTH_PX,
+      height: BOARD_HEIGHT_PX,
       cols,
       rows,
     };
