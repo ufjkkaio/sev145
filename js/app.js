@@ -34,9 +34,22 @@
     btnViewerDelete: $('#btn-viewer-delete'),
     viewerAuthorInput: $('#viewer-author-input'),
     btnViewerSaveAuthor: $('#btn-viewer-save-author'),
+    btnViewerEdit: $('#btn-viewer-edit'),
     photoDeleteConfirm: $('#photo-delete-confirm'),
     btnViewerDeleteCancel: $('#btn-viewer-delete-cancel'),
     btnViewerDeleteOk: $('#btn-viewer-delete-ok'),
+
+    photoEditor: $('#photo-editor'),
+    btnEditorCancel: $('#btn-editor-cancel'),
+    btnEditorSave: $('#btn-editor-save'),
+    btnEditorUndo: $('#btn-editor-undo'),
+    btnEditorClear: $('#btn-editor-clear'),
+    editorSize: $('#editor-size'),
+    editorCanvas: $('#editor-canvas'),
+    editorTextDialog: $('#editor-text-dialog'),
+    editorTextInput: $('#editor-text-input'),
+    btnEditorTextCancel: $('#btn-editor-text-cancel'),
+    btnEditorTextOk: $('#btn-editor-text-ok'),
   };
 
   let state = {
@@ -47,6 +60,25 @@
     photoUrlById: {},
     viewingPhotoId: null,
     nameDialogCallback: null,
+
+    editor: {
+      open: false,
+      tool: 'pen',
+      color: '#e53935',
+      size: 6,
+      isDrawing: false,
+      img: null,
+      photoId: null,
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0,
+      startX: 0,
+      startY: 0,
+      lastX: 0,
+      lastY: 0,
+      undoStack: [],
+      textTarget: null, // {x,y} in canvas coords
+    },
   };
 
   async function init() {
@@ -59,7 +91,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=23').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=24').catch(() => {});
     }
   }
 
@@ -117,12 +149,36 @@
     els.btnViewerDeleteCancel.addEventListener('click', hideDeleteConfirm);
     els.btnViewerDeleteOk.addEventListener('click', handleDeletePhoto);
     els.btnViewerSaveAuthor.addEventListener('click', handleSaveViewerAuthor);
+    els.btnViewerEdit.addEventListener('click', openPhotoEditor);
     els.viewerAuthorInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         handleSaveViewerAuthor();
       }
     });
+
+    els.btnEditorCancel.addEventListener('click', closePhotoEditor);
+    els.btnEditorSave.addEventListener('click', savePhotoEdits);
+    els.btnEditorUndo.addEventListener('click', editorUndo);
+    els.btnEditorClear.addEventListener('click', editorClear);
+    els.editorSize.addEventListener('input', () => {
+      state.editor.size = Number(els.editorSize.value) || 6;
+    });
+
+    document.querySelectorAll('.editor-tool').forEach((btn) => {
+      btn.addEventListener('click', () => selectEditorTool(btn.dataset.tool));
+    });
+    document.querySelectorAll('.editor-color').forEach((btn) => {
+      btn.addEventListener('click', () => selectEditorColor(btn.dataset.color));
+    });
+
+    els.editorCanvas.addEventListener('pointerdown', onEditorPointerDown);
+    els.editorCanvas.addEventListener('pointermove', onEditorPointerMove);
+    els.editorCanvas.addEventListener('pointerup', onEditorPointerUp);
+    els.editorCanvas.addEventListener('pointercancel', onEditorPointerUp);
+
+    els.btnEditorTextCancel.addEventListener('click', closeEditorTextDialog);
+    els.btnEditorTextOk.addEventListener('click', confirmEditorText);
   }
 
   function toggleEditMode() {
@@ -335,6 +391,11 @@
     delete state.photoUrlById[photoId];
   }
 
+  function replacePhotoObjectUrl(photoId, newBlob) {
+    revokePhotoUrl(photoId);
+    return getPhotoObjectUrl(photoId, newBlob);
+  }
+
   function revokeAllPhotoUrls() {
     Object.keys(state.photoUrlById).forEach((id) => revokePhotoUrl(Number(id)));
   }
@@ -510,6 +571,394 @@
       updateShelfCells();
       await renderPhotos(state.currentShelfId);
     }
+  }
+
+  // --- Photo Editor (draw/text/shapes) ---
+
+  async function openPhotoEditor() {
+    if (!state.viewingPhotoId) return;
+    const photoId = state.viewingPhotoId;
+    const photo = await DB.getPhoto(photoId);
+    if (!photo) return;
+
+    const imgUrl = getPhotoObjectUrl(photoId, photo.blob);
+    const img = await loadImage(imgUrl);
+
+    state.editor.open = true;
+    state.editor.photoId = photoId;
+    state.editor.img = img;
+    state.editor.undoStack = [];
+    state.editor.tool = 'pen';
+    state.editor.color = '#e53935';
+    state.editor.size = Number(els.editorSize.value) || 6;
+    syncEditorToolButtons();
+    syncEditorColorButtons();
+
+    closePhotoViewer(); // iOSの重なり/入力バグ回避
+    els.photoEditor.hidden = false;
+    document.body.style.overflow = 'hidden';
+
+    layoutEditorCanvas();
+    drawEditorBase();
+    pushEditorUndo(); // 初期状態
+  }
+
+  function closePhotoEditor() {
+    els.photoEditor.hidden = true;
+    document.body.style.overflow = '';
+    state.editor.open = false;
+    state.editor.isDrawing = false;
+    state.editor.img = null;
+    state.editor.photoId = null;
+    state.editor.undoStack = [];
+    closeEditorTextDialog();
+  }
+
+  function selectEditorTool(tool) {
+    state.editor.tool = tool || 'pen';
+    syncEditorToolButtons();
+  }
+
+  function selectEditorColor(color) {
+    state.editor.color = color || '#e53935';
+    syncEditorColorButtons();
+  }
+
+  function syncEditorToolButtons() {
+    document.querySelectorAll('.editor-tool').forEach((btn) => {
+      const pressed = btn.dataset.tool === state.editor.tool;
+      btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    });
+  }
+
+  function syncEditorColorButtons() {
+    document.querySelectorAll('.editor-color').forEach((btn) => {
+      const pressed = btn.dataset.color === state.editor.color;
+      btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      btn.style.background = btn.dataset.color;
+    });
+  }
+
+  function layoutEditorCanvas() {
+    const canvas = els.editorCanvas;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // compute image fit in CSS pixels space
+    const cssW = rect.width;
+    const cssH = rect.height;
+    const img = state.editor.img;
+    if (!img) return;
+    const scale = Math.min(cssW / img.naturalWidth, cssH / img.naturalHeight);
+    const drawW = img.naturalWidth * scale;
+    const drawH = img.naturalHeight * scale;
+    state.editor.scale = scale;
+    state.editor.offsetX = (cssW - drawW) / 2;
+    state.editor.offsetY = (cssH - drawH) / 2;
+  }
+
+  function drawEditorBase() {
+    const canvas = els.editorCanvas;
+    const ctx = canvas.getContext('2d');
+    const img = state.editor.img;
+    if (!ctx || !img) return;
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.drawImage(
+      img,
+      state.editor.offsetX,
+      state.editor.offsetY,
+      img.naturalWidth * state.editor.scale,
+      img.naturalHeight * state.editor.scale,
+    );
+  }
+
+  function pushEditorUndo() {
+    const canvas = els.editorCanvas;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    try {
+      const data = ctx.getImageData(0, 0, Math.floor(rect.width), Math.floor(rect.height));
+      state.editor.undoStack.push(data);
+      if (state.editor.undoStack.length > 25) state.editor.undoStack.shift();
+    } catch {
+      // ignore (iOS memory edge cases)
+    }
+  }
+
+  function editorUndo() {
+    const canvas = els.editorCanvas;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    if (state.editor.undoStack.length <= 1) return;
+    state.editor.undoStack.pop();
+    const prev = state.editor.undoStack[state.editor.undoStack.length - 1];
+    if (!prev) return;
+    ctx.putImageData(prev, 0, 0);
+  }
+
+  function editorClear() {
+    drawEditorBase();
+    pushEditorUndo();
+  }
+
+  function getCanvasPoint(e) {
+    const canvas = els.editorCanvas;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    return { x, y };
+  }
+
+  function onEditorPointerDown(e) {
+    if (!state.editor.open) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    els.editorCanvas.setPointerCapture(e.pointerId);
+    const p = getCanvasPoint(e);
+    state.editor.isDrawing = true;
+    state.editor.startX = p.x;
+    state.editor.startY = p.y;
+    state.editor.lastX = p.x;
+    state.editor.lastY = p.y;
+
+    if (state.editor.tool === 'pen' || state.editor.tool === 'eraser') {
+      const ctx = els.editorCanvas.getContext('2d');
+      if (!ctx) return;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = state.editor.size;
+      if (state.editor.tool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = state.editor.color;
+      }
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      e.preventDefault();
+    }
+  }
+
+  function onEditorPointerMove(e) {
+    if (!state.editor.open) return;
+    if (!state.editor.isDrawing) return;
+    const p = getCanvasPoint(e);
+    const ctx = els.editorCanvas.getContext('2d');
+    if (!ctx) return;
+
+    if (state.editor.tool === 'pen' || state.editor.tool === 'eraser') {
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      state.editor.lastX = p.x;
+      state.editor.lastY = p.y;
+      e.preventDefault();
+      return;
+    }
+  }
+
+  function onEditorPointerUp(e) {
+    if (!state.editor.open) return;
+    if (!state.editor.isDrawing) return;
+    state.editor.isDrawing = false;
+
+    const p = getCanvasPoint(e);
+    const ctx = els.editorCanvas.getContext('2d');
+    if (!ctx) return;
+
+    if (state.editor.tool === 'pen' || state.editor.tool === 'eraser') {
+      ctx.closePath();
+      ctx.globalCompositeOperation = 'source-over';
+      pushEditorUndo();
+      return;
+    }
+
+    if (state.editor.tool === 'arrow') {
+      drawArrow(ctx, state.editor.startX, state.editor.startY, p.x, p.y, state.editor.color, state.editor.size);
+      pushEditorUndo();
+      return;
+    }
+
+    if (state.editor.tool === 'circle') {
+      drawCircle(ctx, state.editor.startX, state.editor.startY, p.x, p.y, state.editor.color, state.editor.size);
+      pushEditorUndo();
+      return;
+    }
+
+    if (state.editor.tool === 'text') {
+      state.editor.textTarget = { x: p.x, y: p.y };
+      openEditorTextDialog();
+      return;
+    }
+  }
+
+  function drawArrow(ctx, x1, y1, x2, y2, color, size) {
+    const headLen = Math.max(8, size * 2.2);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const angle = Math.atan2(dy, dx);
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawCircle(ctx, x1, y1, x2, y2, color, size) {
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
+    const rx = Math.abs(x2 - x1) / 2;
+    const ry = Math.abs(y2 - y1) / 2;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = size;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.max(1, rx), Math.max(1, ry), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function openEditorTextDialog() {
+    els.editorTextInput.value = '';
+    els.editorTextDialog.hidden = false;
+    setTimeout(() => {
+      els.editorTextInput.focus();
+    }, 50);
+  }
+
+  function closeEditorTextDialog() {
+    els.editorTextDialog.hidden = true;
+    state.editor.textTarget = null;
+  }
+
+  function confirmEditorText() {
+    const t = state.editor.textTarget;
+    if (!t) {
+      closeEditorTextDialog();
+      return;
+    }
+    const text = (els.editorTextInput.value || '').trim().slice(0, 20);
+    closeEditorTextDialog();
+    if (!text) return;
+
+    const ctx = els.editorCanvas.getContext('2d');
+    if (!ctx) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = state.editor.color;
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = 4;
+    ctx.font = `700 ${Math.max(14, Math.round(state.editor.size * 3))}px -apple-system, BlinkMacSystemFont, "Hiragino Sans", Meiryo, sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.strokeText(text, t.x + 2, t.y + 2);
+    ctx.fillText(text, t.x + 2, t.y + 2);
+    ctx.restore();
+    pushEditorUndo();
+  }
+
+  async function savePhotoEdits() {
+    if (!state.editor.open || !state.editor.photoId) return;
+    const photoId = state.editor.photoId;
+    const photo = await DB.getPhoto(photoId);
+    if (!photo) {
+      closePhotoEditor();
+      return;
+    }
+
+    const canvas = els.editorCanvas;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    // export: crop to drawn image area (avoid black margins)
+    const img = state.editor.img;
+    if (!img) return;
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.floor(img.naturalWidth));
+    out.height = Math.max(1, Math.floor(img.naturalHeight));
+    const octx = out.getContext('2d');
+    if (!octx) return;
+
+    // draw from visible canvas into original resolution
+    // mapping: (cssX - offsetX) / scale => imgX
+    const sx = state.editor.offsetX;
+    const sy = state.editor.offsetY;
+    const sw = img.naturalWidth * state.editor.scale;
+    const sh = img.naturalHeight * state.editor.scale;
+
+    // read pixels from editor canvas area corresponding to image area
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const imageData = ctx.getImageData(
+      Math.floor(sx),
+      Math.floor(sy),
+      Math.max(1, Math.floor(sw)),
+      Math.max(1, Math.floor(sh)),
+    );
+
+    // put into temp canvas at same pixel size (css pixels). then scale to natural
+    const tmp = document.createElement('canvas');
+    tmp.width = Math.max(1, Math.floor(sw));
+    tmp.height = Math.max(1, Math.floor(sh));
+    const tctx = tmp.getContext('2d');
+    if (!tctx) return;
+    tctx.putImageData(imageData, 0, 0);
+
+    octx.drawImage(tmp, 0, 0, tmp.width, tmp.height, 0, 0, out.width, out.height);
+
+    const newBlob = await canvasToBlob(out, 'image/jpeg', 0.9);
+    if (!newBlob) return;
+
+    photo.blob = newBlob;
+    await DB.updatePhoto(photo);
+
+    // refresh urls and UI
+    const newUrl = replacePhotoObjectUrl(photoId, newBlob);
+    if (state.currentShelfId) {
+      state.photoCounts = await DB.getPhotoCounts();
+      updateShelfCells();
+      await renderPhotos(state.currentShelfId);
+    }
+    closePhotoEditor();
+    // reopen viewer with updated photo
+    await openPhotoViewer(photoId);
+    els.viewerImage.src = newUrl;
+  }
+
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image load failed'));
+      img.src = url;
+    });
+  }
+
+  function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve) => {
+      try {
+        canvas.toBlob((b) => resolve(b), type, quality);
+      } catch {
+        resolve(null);
+      }
+    });
   }
 
   function showNameDialog(title, defaultValue, callback) {
