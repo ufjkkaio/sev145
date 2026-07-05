@@ -42,10 +42,9 @@
     shelfMap: {},
     photoCounts: {},
     currentShelfId: null,
-    photoObjectUrls: [],
-    viewerBlobUrl: null,
-    nameDialogCallback: null,
+    photoUrlById: {},
     viewingPhotoId: null,
+    nameDialogCallback: null,
   };
 
   async function init() {
@@ -313,13 +312,40 @@
     els.folderOverlay.hidden = true;
     document.body.style.overflow = '';
     state.currentShelfId = null;
-    revokePhotoUrls();
+    revokeAllPhotoUrls();
     refresh();
   }
 
+  function getPhotoObjectUrl(photoId, blob) {
+    if (state.photoUrlById[photoId]) {
+      return state.photoUrlById[photoId];
+    }
+    const url = URL.createObjectURL(blob);
+    state.photoUrlById[photoId] = url;
+    return url;
+  }
+
+  function revokePhotoUrl(photoId) {
+    const url = state.photoUrlById[photoId];
+    if (!url) return;
+    URL.revokeObjectURL(url);
+    delete state.photoUrlById[photoId];
+  }
+
+  function revokeAllPhotoUrls() {
+    Object.keys(state.photoUrlById).forEach((id) => revokePhotoUrl(Number(id)));
+  }
+
   async function renderPhotos(shelfId) {
-    revokePhotoUrls();
     const photos = await DB.getPhotosByShelf(shelfId);
+    const currentIds = new Set(photos.map((p) => p.id));
+
+    for (const id of Object.keys(state.photoUrlById)) {
+      if (!currentIds.has(Number(id))) {
+        revokePhotoUrl(Number(id));
+      }
+    }
+
     els.photoGrid.innerHTML = '';
 
     if (photos.length === 0) {
@@ -333,8 +359,7 @@
     photos.sort((a, b) => a.createdAt - b.createdAt);
 
     for (const photo of photos) {
-      const url = URL.createObjectURL(photo.blob);
-      state.photoObjectUrls.push(url);
+      const url = getPhotoObjectUrl(photo.id, photo.blob);
 
       const item = document.createElement('div');
       item.className = 'photo-item';
@@ -363,18 +388,19 @@
     }
   }
 
-  function revokePhotoUrls() {
-    state.photoObjectUrls.forEach((url) => {
-      if (url !== state.viewerBlobUrl) URL.revokeObjectURL(url);
-    });
-    state.photoObjectUrls = [];
+  function closePhotoViewer() {
+    els.photoViewer.hidden = true;
+    hideDeleteConfirm();
+    state.viewingPhotoId = null;
+    els.viewerImage.removeAttribute('src');
   }
 
-  function revokeViewerUrl() {
-    if (state.viewerBlobUrl) {
-      URL.revokeObjectURL(state.viewerBlobUrl);
-      state.viewerBlobUrl = null;
-    }
+  function showDeleteConfirm() {
+    els.photoDeleteConfirm.hidden = false;
+  }
+
+  function hideDeleteConfirm() {
+    els.photoDeleteConfirm.hidden = true;
   }
 
   async function handleCheckChange() {
@@ -400,10 +426,8 @@
     const photo = await DB.getPhoto(photoId);
     if (!photo) return;
 
-    revokeViewerUrl();
     state.viewingPhotoId = photoId;
-    state.viewerBlobUrl = URL.createObjectURL(photo.blob);
-    els.viewerImage.src = state.viewerBlobUrl;
+    els.viewerImage.src = getPhotoObjectUrl(photoId, photo.blob);
     els.viewerAuthorInput.value = photo.author || '';
     hideDeleteConfirm();
     els.photoViewer.hidden = false;
@@ -414,21 +438,6 @@
     requestAnimationFrame(() => {
       if (!photo.author) els.viewerAuthorInput.focus();
     });
-  }
-
-  function closePhotoViewer() {
-    els.photoViewer.hidden = true;
-    hideDeleteConfirm();
-    state.viewingPhotoId = null;
-    revokeViewerUrl();
-  }
-
-  function showDeleteConfirm() {
-    els.photoDeleteConfirm.hidden = false;
-  }
-
-  function hideDeleteConfirm() {
-    els.photoDeleteConfirm.hidden = true;
   }
 
   function handleRenameShelf() {
