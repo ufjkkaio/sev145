@@ -16,6 +16,7 @@
   const MIN_CELL = 50;
   const TAP_THRESHOLD = 8;
   const SWIPE_RESIZE = 22;
+  const DRAG_START = SWIPE_RESIZE + 8;
   const SNAP_DIST = 32;
   const MAX_BLOCK_CELLS = 16;
   const VIEW_SCALE_MIN = 0.5;
@@ -28,7 +29,6 @@
     btnEditMode: $('#btn-edit-mode'),
     btnReset: $('#btn-reset'),
     btnAddShelf: $('#btn-add-shelf'),
-    btnDeleteSelected: $('#btn-delete-selected'),
     boardCanvas: $('#board-canvas'),
     boardTransform: $('#board-transform'),
     mapArea: $('#map-area'),
@@ -86,7 +86,6 @@
     viewingPhotoId: null,
     nameDialogCallback: null,
     pendingDeleteSlotKey: null,
-    selectedSlotKey: null,
     view: { scale: 1, x: 0, y: 0 },
     metrics: null,
     drag: null,
@@ -163,18 +162,6 @@
     els.btnLayoutEdit.addEventListener('click', toggleLayoutEditMode);
     els.btnEditMode.addEventListener('click', toggleEditMode);
     els.btnAddShelf.addEventListener('click', addShelfBlock);
-    els.btnDeleteSelected.addEventListener('click', () => {
-      if (state.selectedSlotKey) {
-        state.pendingDeleteSlotKey = state.selectedSlotKey;
-        els.deleteShelfDialog.hidden = false;
-      }
-    });
-    els.boardCanvas.addEventListener('pointerdown', (e) => {
-      if (!state.layoutEditMode) return;
-      if (e.target === els.boardCanvas || e.target.classList.contains('board-empty')) {
-        clearSelection();
-      }
-    });
     els.btnFolderBack.addEventListener('click', closeFolder);
     els.folderOverlay.addEventListener('click', (e) => {
       if (e.target === els.folderOverlay) closeFolder();
@@ -449,30 +436,14 @@
     els.btnLayoutEdit.setAttribute('aria-pressed', String(state.layoutEditMode));
     els.layoutHint.hidden = !state.layoutEditMode;
     els.btnAddShelf.hidden = !state.layoutEditMode;
-    if (!state.layoutEditMode) clearSelection();
+    if (!state.layoutEditMode) return;
     document.body.classList.toggle('layout-edit-mode', state.layoutEditMode);
     renderBoard();
   }
 
-  function selectBlock(slotKey) {
-    state.selectedSlotKey = slotKey;
-    els.btnDeleteSelected.hidden = !state.layoutEditMode;
-    renderBoard();
-  }
-
-  function clearSelection() {
-    state.selectedSlotKey = null;
-    els.btnDeleteSelected.hidden = true;
-    document.querySelectorAll('.board-block--selected').forEach((el) => {
-      el.classList.remove('board-block--selected');
-    });
-  }
-
-  function updateSelectionUI() {
-    document.querySelectorAll('.board-block[data-slot-key]').forEach((el) => {
-      el.classList.toggle('board-block--selected', el.dataset.slotKey === state.selectedSlotKey);
-    });
-    els.btnDeleteSelected.hidden = !state.layoutEditMode || !state.selectedSlotKey;
+  function promptDeleteShelf(slotKey) {
+    state.pendingDeleteSlotKey = slotKey;
+    els.deleteShelfDialog.hidden = false;
   }
 
   function toggleEditMode() {
@@ -535,7 +506,6 @@
       root.appendChild(createBoardBlock(block));
     }
     updateShelfCells();
-    updateSelectionUI();
     applyViewTransform(false);
   }
 
@@ -545,9 +515,6 @@
     const el = document.createElement('button');
     el.type = 'button';
     el.className = 'board-block shelf-cell';
-    if (state.selectedSlotKey === block.slotKey) {
-      el.classList.add('board-block--selected');
-    }
     el.dataset.slotKey = block.slotKey;
     el.style.left = `${px.left}px`;
     el.style.top = `${px.top}px`;
@@ -601,7 +568,6 @@
     const pt = screenToBoard(e.clientX, e.clientY);
     state.drag = {
       slotKey: block.slotKey,
-      wasSelected: state.selectedSlotKey === block.slotKey,
       startX: e.clientX,
       startY: e.clientY,
       moved: false,
@@ -617,18 +583,11 @@
     const drag = state.drag;
     if (!drag || drag.el !== e.currentTarget) return;
 
-    // 選択中は動かさず、スワイプ伸長だけ受け付ける
-    if (drag.wasSelected) {
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      drag.el.classList.toggle('board-block--resize-hint', Math.hypot(dx, dy) >= SWIPE_RESIZE);
-      e.preventDefault();
-      return;
-    }
-
     const dx = e.clientX - drag.startX;
     const dy = e.clientY - drag.startY;
-    if (!drag.repositioning && (Math.abs(dx) > TAP_THRESHOLD || Math.abs(dy) > TAP_THRESHOLD)) {
+    drag.el.classList.toggle('board-block--resize-hint', Math.hypot(dx, dy) >= SWIPE_RESIZE && Math.hypot(dx, dy) < DRAG_START);
+
+    if (!drag.repositioning && (Math.abs(dx) > DRAG_START || Math.abs(dy) > DRAG_START)) {
       drag.repositioning = true;
       drag.moved = true;
       drag.el.classList.add('board-block--dragging');
@@ -686,24 +645,13 @@
 
     const block = getBlock(drag.slotKey);
 
-    if (drag.wasSelected) {
-      if (dist >= SWIPE_RESIZE && block) {
+    if (!drag.repositioning) {
+      if (dist >= SWIPE_RESIZE && dist < DRAG_START && block) {
         await tryResizeBlock(block, dx, dy);
         await refresh();
         renderBoard();
-      } else {
-        clearSelection();
-        updateSelectionUI();
-      }
-      state.drag = null;
-      return;
-    }
-
-    if (!drag.repositioning) {
-      if (state.selectedSlotKey === drag.slotKey) {
-        clearSelection();
-      } else {
-        selectBlock(drag.slotKey);
+      } else if (dist < TAP_THRESHOLD) {
+        promptDeleteShelf(drag.slotKey);
       }
       state.drag = null;
       return;
@@ -720,12 +668,10 @@
 
     if (drop.type === 'merge') {
       await mergeBlocksAt(block, drop.mergeTarget, drop.preview);
-      clearSelection();
     } else {
       block.x = drop.x;
       block.y = drop.y;
       await saveBoard();
-      selectBlock(block.slotKey);
     }
 
     state.drag = null;
@@ -967,7 +913,6 @@
 
     state.board.blocks = state.board.blocks.filter((b) => b.slotKey !== slotKey);
     await saveBoard();
-    clearSelection();
     await refresh();
     renderBoard();
   }
