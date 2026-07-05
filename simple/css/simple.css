@@ -1,12 +1,5 @@
 /* ホワイトボード風レイアウト（共通UIは ../css/app.css） */
 
-.app-version {
-  font-size: 0.65rem;
-  font-weight: 500;
-  color: #888;
-  vertical-align: middle;
-}
-
 .header__store-name {
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.92);

@@ -105,7 +105,6 @@
 
   async function init() {
     registerServiceWorker();
-    showBuildVersion();
     bindEvents();
     state.board = await DB.getBoardLayout();
     state.view = await DB.getBoardView();
