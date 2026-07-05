@@ -473,9 +473,11 @@
     photo.author = author;
     await DB.updatePhoto(photo);
     if (author) localStorage.setItem(LAST_AUTHOR_KEY, author);
-    els.viewerAuthorInput.blur();
-    if (state.currentShelfId) {
-      await renderPhotos(state.currentShelfId);
+
+    const shelfId = state.currentShelfId;
+    closePhotoViewer();
+    if (shelfId) {
+      await renderPhotos(shelfId);
     }
   }
 

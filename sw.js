@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shelf-cleaning-v17';
+const CACHE_NAME = 'shelf-cleaning-v18';
 const ASSETS = [
   './',
   './index.html',
