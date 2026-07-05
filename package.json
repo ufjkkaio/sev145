@@ -1,0 +1,7 @@
+{
+  "name": "shelf-cleaning-app",
+  "private": true,
+  "scripts": {
+    "deploy": "./deploy.sh"
+  }
+}
