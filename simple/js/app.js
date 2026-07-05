@@ -137,13 +137,6 @@
     }).catch(() => {});
   }
 
-  function showBuildVersion() {
-    const script = document.querySelector('script[src*="app.js"]');
-    const v = script && new URL(script.src, location.href).searchParams.get('v');
-    const el = document.getElementById('app-version');
-    if (el && v) el.textContent = `v${v}`;
-  }
-
   async function refresh() {
     const shelves = await DB.getAllShelves();
     state.shelfMap = {};
