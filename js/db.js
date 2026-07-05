@@ -198,15 +198,29 @@ async function resetAll() {
   });
 }
 
-// --- Photo counts cache ---
+// --- Photo counts (metadata only — never load blobs for counting) ---
 
 async function getPhotoCounts() {
   const shelves = await getAllShelves();
+  const database = await openDB();
+  const transaction = database.transaction('photos', 'readonly');
+  const index = transaction.objectStore('photos').index('shelfId');
   const counts = {};
-  for (const shelf of shelves) {
-    const photos = await getPhotosByShelf(shelf.id);
-    counts[shelf.id] = photos.length;
-  }
+
+  await Promise.all(
+    shelves.map(
+      (shelf) =>
+        new Promise((resolve, reject) => {
+          const req = index.count(shelf.id);
+          req.onsuccess = () => {
+            counts[shelf.id] = req.result;
+            resolve();
+          };
+          req.onerror = () => reject(req.error);
+        }),
+    ),
+  );
+
   return counts;
 }
 
