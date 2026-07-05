@@ -168,7 +168,7 @@
     });
     els.boardCanvas.addEventListener('pointerdown', (e) => {
       if (!state.layoutEditMode) return;
-      if (e.target === els.boardCanvas || e.target.classList.contains('whiteboard-empty')) {
+      if (e.target === els.boardCanvas || e.target.classList.contains('board-empty')) {
         clearSelection();
       }
     });
@@ -476,7 +476,7 @@
 
     if (state.board.blocks.length === 0) {
       const empty = document.createElement('p');
-      empty.className = 'whiteboard-empty';
+      empty.className = 'board-empty';
       empty.textContent = state.layoutEditMode
         ? '「棚を追加」で正方形を置けます'
         : 'レイアウトから棚を追加してください';

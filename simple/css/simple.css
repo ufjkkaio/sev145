@@ -67,19 +67,8 @@
   will-change: transform;
 }
 
-.whiteboard {
-  min-height: 100%;
-  min-width: 100%;
-  padding: 10px;
-  box-sizing: border-box;
-  background-color: #fafbfc;
-}
-
-.whiteboard__canvas {
+.board-canvas {
   position: relative;
-  width: 100%;
-  max-width: 100%;
-  min-height: 200px;
 }
 
 .board-block {
@@ -228,7 +217,7 @@
   user-select: none;
 }
 
-.whiteboard-empty {
+.board-empty {
   position: absolute;
   left: 50%;
   top: 40%;
