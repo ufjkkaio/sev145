@@ -11,7 +11,7 @@
   <title>店内棚 清掃管理</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/app.css?v=24">
+  <link rel="stylesheet" href="css/app.css?v=25">
 </head>
 <body>
   <div id="app">
@@ -117,55 +117,21 @@
       </div>
     </div>
 
-    <!-- 写真編集（書き込み） -->
+    <!-- 写真編集（ペンのみ） -->
     <div id="photo-editor" class="photo-editor" hidden>
       <div class="photo-editor__bar">
-        <button type="button" id="btn-editor-cancel" class="btn btn--ghost btn--sm">戻る</button>
-        <div class="photo-editor__title">写真編集</div>
+        <button type="button" id="btn-editor-back" class="btn btn--ghost btn--sm">戻る</button>
+        <div class="photo-editor__title">ペンで書き込み</div>
         <button type="button" id="btn-editor-save" class="btn btn--primary btn--sm">保存</button>
-      </div>
-      <div class="photo-editor__tools">
-        <div class="photo-editor__tool-row">
-          <button type="button" class="btn btn--ghost btn--sm editor-tool" data-tool="pen" aria-pressed="true">ペン</button>
-          <button type="button" class="btn btn--ghost btn--sm editor-tool" data-tool="arrow" aria-pressed="false">矢印</button>
-          <button type="button" class="btn btn--ghost btn--sm editor-tool" data-tool="circle" aria-pressed="false">丸</button>
-          <button type="button" class="btn btn--ghost btn--sm editor-tool" data-tool="text" aria-pressed="false">文字</button>
-          <button type="button" class="btn btn--ghost btn--sm editor-tool" data-tool="eraser" aria-pressed="false">消しゴム</button>
-        </div>
-        <div class="photo-editor__tool-row">
-          <div class="photo-editor__colors" role="group" aria-label="色">
-            <button type="button" class="editor-color" data-color="#e53935" aria-pressed="true" aria-label="赤"></button>
-            <button type="button" class="editor-color" data-color="#1e88e5" aria-pressed="false" aria-label="青"></button>
-            <button type="button" class="editor-color" data-color="#43a047" aria-pressed="false" aria-label="緑"></button>
-            <button type="button" class="editor-color" data-color="#000000" aria-pressed="false" aria-label="黒"></button>
-            <button type="button" class="editor-color" data-color="#ffffff" aria-pressed="false" aria-label="白"></button>
-          </div>
-          <label class="photo-editor__size">
-            太さ
-            <input type="range" id="editor-size" min="2" max="18" value="6">
-          </label>
-          <button type="button" id="btn-editor-undo" class="btn btn--ghost btn--sm">Undo</button>
-          <button type="button" id="btn-editor-clear" class="btn btn--ghost btn--sm">全消し</button>
-        </div>
       </div>
       <div class="photo-editor__stage">
         <canvas id="editor-canvas" class="photo-editor__canvas"></canvas>
       </div>
-      <div id="editor-text-dialog" class="dialog-overlay" hidden>
-        <div class="dialog" role="dialog" aria-labelledby="editor-text-title">
-          <h3 id="editor-text-title" class="dialog__title">文字を入力</h3>
-          <input type="text" id="editor-text-input" class="dialog__input" placeholder="例：ここを重点的に清掃" maxlength="20" autocomplete="off">
-          <div class="dialog__actions">
-            <button type="button" id="btn-editor-text-cancel" class="btn btn--ghost">キャンセル</button>
-            <button type="button" id="btn-editor-text-ok" class="btn btn--primary">追加</button>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
-  <script src="js/layout-template.js?v=24"></script>
-  <script src="js/db.js?v=24"></script>
-  <script src="js/app.js?v=24"></script>
+  <script src="js/layout-template.js?v=25"></script>
+  <script src="js/db.js?v=25"></script>
+  <script src="js/app.js?v=25"></script>
 </body>
 </html>
