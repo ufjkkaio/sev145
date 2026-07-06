@@ -2,12 +2,9 @@
  * 145号店 店内レイアウト定義（v6: 周囲棚48〜70を追加）
  */
 const LAYOUT_TEMPLATE = {
-  version: 6,
+  version: 7,
   zones: [
-    { slotKey: 'chilled', defaultName: 'チルド', placement: 'entrance' },
-    { slotKey: 'walkin', defaultName: 'ウォークイン', placement: 'left' },
     { slotKey: 'register', defaultName: 'レジ', placement: 'right' },
-    { slotKey: 'bookshelf', defaultName: '本棚', placement: 'footer' },
   ],
   topPerimeter: {
     leading: { slotKey: 's-48', defaultName: '48' },

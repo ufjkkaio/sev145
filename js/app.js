@@ -225,7 +225,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=59').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=60').catch(() => {});
     }
   }
 
@@ -313,16 +313,7 @@
     const floor = document.createElement('div');
     floor.className = 'store-floor';
 
-    const chilledZone = layout.zones.find((z) => z.placement === 'entrance');
-    const walkinZone = layout.zones.find((z) => z.placement === 'left');
     const registerZone = layout.zones.find((z) => z.placement === 'right');
-    const bookshelfZone = layout.zones.find((z) => z.placement === 'footer');
-
-    if (chilledZone) {
-      const chilled = createZoneCell(chilledZone.slotKey, chilledZone.defaultName);
-      chilled.classList.add('store-entrance');
-      floor.appendChild(chilled);
-    }
 
     if (layout.topPerimeter) {
       floor.appendChild(createTopPerimeter(layout.topPerimeter));
@@ -333,9 +324,6 @@
 
     const leftCol = document.createElement('div');
     leftCol.className = 'store-left-col';
-    if (walkinZone) {
-      leftCol.appendChild(createZoneCell(walkinZone.slotKey, walkinZone.defaultName));
-    }
     if (layout.leftPerimeter) {
       const leftStack = document.createElement('div');
       leftStack.className = 'store-perimeter-left';
@@ -360,11 +348,6 @@
 
     if (layout.bottomPerimeter) {
       floor.appendChild(createBottomPerimeter(layout.bottomPerimeter));
-    }
-
-    if (bookshelfZone) {
-      const bookshelf = createZoneCell(bookshelfZone.slotKey, bookshelfZone.defaultName, true);
-      floor.appendChild(bookshelf);
     }
 
     root.appendChild(floor);
