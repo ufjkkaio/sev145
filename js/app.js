@@ -6,8 +6,18 @@
   const PHOTO_AUTHOR_MAX = 10;
   const PHOTO_AUTHOR_PLACEHOLDER = 'シフト　名前';
   const LAST_AUTHOR_KEY = 'lastPhotographer';
+  const STORE_NUMBER = '528089';
 
   const els = {
+    appRoot: $('#app'),
+    authGate: $('#auth-gate'),
+    authError: $('#auth-error'),
+    authPanelHome: $('#auth-panel-home'),
+    authPanelLogin: $('#auth-panel-login'),
+    authPanelQr: $('#auth-panel-qr'),
+    authLoginNumber: $('#auth-login-number'),
+    authLoginPass: $('#auth-login-pass'),
+    authQrFile: $('#auth-qr-file'),
     btnEditMode: $('#btn-edit-mode'),
     btnReset: $('#btn-reset'),
     storeLayout: $('#store-layout'),
@@ -75,30 +85,158 @@
 
   async function init() {
     registerServiceWorker();
+    showBuildVersion();
     bindEvents();
+    bindAuthEvents();
+
+    try {
+      let entry = await CloudAuth.tryLoginFromUrl();
+      if (!entry) entry = await CloudAuth.restoreSession();
+      if (entry) assert145Store(entry);
+      if (!entry) {
+        showAuthHub('home');
+        return;
+      }
+      await bootApp();
+    } catch (err) {
+      console.error(err);
+      showAuthHub('login', err.message || '接続に失敗しました');
+    }
+  }
+
+  function assert145Store(entry) {
+    const meta = CloudAuth.getCurrentStoreMeta();
+    const layoutType = meta?.layoutType || entry?.layoutType;
+    const storeNumber = meta?.storeNumber || entry?.storeNumber;
+    if (layoutType !== 'fixed-145' && storeNumber !== STORE_NUMBER) {
+      throw new Error('145号店（528089）の合言葉でログインしてください');
+    }
+  }
+
+  async function bootApp() {
+    assert145Store();
+    hideAuthHub();
+    CloudDB.stopSync();
+    CloudDB.setOnChange(() => {
+      refresh().then(() => {
+        if (state.currentShelfId) renderPhotos(state.currentShelfId);
+      });
+    });
+    CloudDB.startSync();
     await ensureShelves();
     await refresh();
     renderStoreLayout();
   }
 
+  function showAuthError(msg) {
+    if (!msg) {
+      els.authError.hidden = true;
+      els.authError.textContent = '';
+      return;
+    }
+    els.authError.hidden = false;
+    els.authError.textContent = msg;
+  }
+
+  function showAuthPanel(name) {
+    const panels = {
+      home: els.authPanelHome,
+      login: els.authPanelLogin,
+      qr: els.authPanelQr,
+    };
+    Object.values(panels).forEach((p) => { if (p) p.hidden = true; });
+    if (panels[name]) panels[name].hidden = false;
+  }
+
+  function showAuthHub(panel = 'home', errorMsg = '') {
+    if (els.appRoot) els.appRoot.hidden = true;
+    if (els.authGate) els.authGate.hidden = false;
+    showAuthPanel(panel);
+    showAuthError(errorMsg);
+  }
+
+  function hideAuthHub() {
+    if (els.authGate) els.authGate.hidden = true;
+    if (els.appRoot) els.appRoot.hidden = false;
+    showAuthError('');
+  }
+
+  function bindAuthEvents() {
+    $('#btn-auth-login')?.addEventListener('click', () => {
+      showAuthError('');
+      showAuthPanel('login');
+      els.authLoginPass?.focus();
+    });
+    $('#btn-auth-qr')?.addEventListener('click', () => {
+      showAuthError('');
+      showAuthPanel('qr');
+    });
+    $('#btn-auth-login-back')?.addEventListener('click', () => showAuthPanel('home'));
+    $('#btn-auth-qr-back')?.addEventListener('click', () => showAuthPanel('home'));
+
+    $('#btn-auth-login-go')?.addEventListener('click', async () => {
+      try {
+        showAuthError('');
+        await CloudAuth.login(STORE_NUMBER, els.authLoginPass.value);
+        assert145Store();
+        await bootApp();
+      } catch (err) {
+        showAuthError(err.message);
+      }
+    });
+
+    $('#btn-auth-qr-pick')?.addEventListener('click', () => els.authQrFile?.click());
+    els.authQrFile?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      try {
+        showAuthError('');
+        const text = await decodeQrFromFile(file);
+        await CloudAuth.loginFromQr(text);
+        assert145Store();
+        await bootApp();
+      } catch (err) {
+        showAuthError(err.message);
+      }
+    });
+  }
+
+  async function decodeQrFromFile(file) {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (!code?.data) throw new Error('QRコードが見つかりませんでした');
+    return code.data;
+  }
+
+  function showBuildVersion() {
+    const script = document.querySelector('script[src*="app.js"]');
+    const v = script && new URL(script.src, location.href).searchParams.get('v');
+    const el = document.getElementById('app-version');
+    if (el && v) el.textContent = `v${v}`;
+  }
+
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=57').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=58').catch(() => {});
     }
   }
 
   async function ensureShelves() {
     const layout = getActiveLayout();
     const version = await DB.getLayoutVersion();
+    const slots = getAllSlots();
     if (version !== layout.version) {
-      const shelves = await DB.getAllShelves();
-      for (const shelf of shelves) {
-        await DB.deleteShelf(shelf.id);
-      }
-      await DB.seedShelvesFromTemplate();
-      await DB.setLayoutVersion(layout.version);
+      await DB.syncShelvesFromTemplate(slots, { reset: true, layoutVersion: layout.version });
     } else {
-      await DB.seedShelvesFromTemplate();
+      await DB.syncShelvesFromTemplate(slots);
     }
   }
 
@@ -354,6 +492,12 @@
     refresh();
   }
 
+  function getPhotoDisplayUrl(photo) {
+    if (photo.url) return photo.url;
+    if (photo.blob) return getPhotoObjectUrl(photo.id, photo.blob);
+    return '';
+  }
+
   function getPhotoObjectUrl(photoId, blob) {
     if (state.photoUrlById[photoId]) {
       return state.photoUrlById[photoId];
@@ -376,7 +520,7 @@
   }
 
   function revokeAllPhotoUrls() {
-    Object.keys(state.photoUrlById).forEach((id) => revokePhotoUrl(Number(id)));
+    Object.keys(state.photoUrlById).forEach((id) => revokePhotoUrl(id));
   }
 
   async function renderPhotos(shelfId) {
@@ -384,8 +528,8 @@
     const currentIds = new Set(photos.map((p) => p.id));
 
     for (const id of Object.keys(state.photoUrlById)) {
-      if (!currentIds.has(Number(id))) {
-        revokePhotoUrl(Number(id));
+      if (!currentIds.has(id)) {
+        revokePhotoUrl(id);
       }
     }
 
@@ -402,7 +546,7 @@
     photos.sort((a, b) => a.createdAt - b.createdAt);
 
     for (const photo of photos) {
-      const url = getPhotoObjectUrl(photo.id, photo.blob);
+      const url = getPhotoDisplayUrl(photo);
 
       const item = document.createElement('div');
       item.className = 'photo-item';
@@ -488,7 +632,7 @@
     if (!photo) return;
 
     state.viewingPhotoId = photoId;
-    els.viewerImage.src = getPhotoObjectUrl(photoId, photo.blob);
+    els.viewerImage.src = getPhotoDisplayUrl(photo);
     hideDeleteConfirm();
     openPhotoViewerElement();
 
@@ -560,7 +704,7 @@
     const photo = await DB.getPhoto(photoId);
     if (!photo) return;
 
-    const imgUrl = getPhotoObjectUrl(photoId, photo.blob);
+    const imgUrl = getPhotoDisplayUrl(photo);
     const img = await loadImage(imgUrl);
 
     state.editor.open = true;
@@ -742,6 +886,7 @@
   function loadImage(url) {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      if (/^https?:/i.test(url)) img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('image load failed'));
       img.src = url;

@@ -1016,3 +1016,69 @@ body.photo-viewer-open {
   border-radius: 12px;
   touch-action: none;
 }
+
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #f0f4f0;
+}
+
+.auth-gate[hidden] {
+  display: none !important;
+}
+
+.auth-gate__card {
+  width: 100%;
+  max-width: 360px;
+  padding: 24px 20px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.auth-gate__title {
+  margin: 0 0 16px;
+  text-align: center;
+  font-size: 1.25rem;
+  color: #1a5f2a;
+}
+
+.auth-gate__error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #ffebee;
+  color: #c62828;
+  font-size: 0.85rem;
+}
+
+.auth-gate__label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #444;
+}
+
+.auth-gate__btn {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.auth-gate__hint {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+.app-version {
+  font-size: 0.65em;
+  font-weight: 400;
+  opacity: 0.75;
+}

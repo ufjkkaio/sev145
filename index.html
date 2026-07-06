@@ -11,12 +11,44 @@
   <title>店内棚 清掃管理</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/app.css?v=57">
+  <link rel="stylesheet" href="css/app.css?v=58">
 </head>
 <body>
-  <div id="app">
+  <div id="auth-gate" class="auth-gate" hidden>
+    <div class="auth-gate__card">
+      <h2 class="auth-gate__title">145号店 棚清掃</h2>
+      <p id="auth-error" class="auth-gate__error" hidden></p>
+
+      <div id="auth-panel-home" class="auth-panel">
+        <button type="button" id="btn-auth-login" class="btn btn--primary auth-gate__btn">店舗に入る</button>
+        <button type="button" id="btn-auth-qr" class="btn btn--ghost auth-gate__btn">QRで入る</button>
+      </div>
+
+      <div id="auth-panel-login" class="auth-panel" hidden>
+        <label class="auth-gate__label">店番号</label>
+        <input type="text" id="auth-login-number" class="dialog__input" value="528089" readonly>
+        <label class="auth-gate__label">合言葉</label>
+        <input type="text" id="auth-login-pass" class="dialog__input" autocomplete="off" placeholder="合言葉">
+        <div class="dialog__actions">
+          <button type="button" id="btn-auth-login-back" class="btn btn--ghost">戻る</button>
+          <button type="button" id="btn-auth-login-go" class="btn btn--primary">入る</button>
+        </div>
+      </div>
+
+      <div id="auth-panel-qr" class="auth-panel" hidden>
+        <p class="auth-gate__hint">QRコードの画像を選ぶか、カメラで読み取ってください</p>
+        <input type="file" id="auth-qr-file" accept="image/*" hidden>
+        <button type="button" id="btn-auth-qr-pick" class="btn btn--ghost auth-gate__btn">QR画像を選ぶ</button>
+        <div class="dialog__actions">
+          <button type="button" id="btn-auth-qr-back" class="btn btn--ghost">戻る</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" hidden>
     <header class="header">
-      <h1 class="header__title">店内棚 清掃管理</h1>
+      <h1 class="header__title">店内棚 清掃管理 <span id="app-version" class="app-version"></span></h1>
       <div class="header__actions">
         <button type="button" id="btn-edit-mode" class="btn btn--ghost" aria-pressed="false">名称編集</button>
         <button type="button" id="btn-reset" class="btn btn--header-reset">リセット</button>
@@ -130,8 +162,17 @@
     </div>
   </div>
 
-  <script src="js/layout-template.js?v=57"></script>
-  <script src="js/db.js?v=57"></script>
-  <script src="js/app.js?v=57"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="js/firebase-config.js?v=58"></script>
+  <script src="js/firebase-boot.js?v=58"></script>
+  <script src="js/cloud-auth.js?v=58"></script>
+  <script src="js/cloud-db.js?v=58"></script>
+  <script src="js/layout-template.js?v=58"></script>
+  <script src="js/db.js?v=58"></script>
+  <script src="js/app.js?v=58"></script>
 </body>
 </html>

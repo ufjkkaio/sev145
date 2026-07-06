@@ -317,6 +317,47 @@ const CloudDB = (function () {
     }
   }
 
+  async function getLayoutVersion() {
+    const snap = await storeRef().get();
+    return snap.data()?.fixedLayoutVersion || 0;
+  }
+
+  async function setLayoutVersion(version) {
+    await storeRef().set({ fixedLayoutVersion: version }, { merge: true });
+  }
+
+  async function syncShelvesFromTemplate(slots, options = {}) {
+    const slotKeys = new Set(slots.map((s) => s.slotKey));
+
+    if (options.reset) {
+      const existing = await getAllShelves();
+      for (const shelf of existing) {
+        await deleteShelf(shelf.id);
+      }
+      if (options.layoutVersion != null) {
+        await setLayoutVersion(options.layoutVersion);
+      }
+    }
+
+    let existing = await getAllShelves();
+    for (const shelf of existing) {
+      if (!slotKeys.has(shelf.slotKey)) {
+        await deleteShelf(shelf.id);
+      }
+    }
+
+    existing = await getAllShelves();
+    const bySlot = new Map(existing.map((s) => [s.slotKey, s]));
+    for (const slot of slots) {
+      if (!bySlot.has(slot.slotKey)) {
+        await addShelf({
+          slotKey: slot.slotKey,
+          name: slot.defaultName,
+        });
+      }
+    }
+  }
+
   async function resetAll() {
     const shelves = await getAllShelves();
     for (const shelf of shelves) {
@@ -363,6 +404,9 @@ const CloudDB = (function () {
     getPhoto,
     getPhotoBlob,
     syncShelvesFromBoard,
+    syncShelvesFromTemplate,
+    getLayoutVersion,
+    setLayoutVersion,
     resetAll,
     getPhotoCounts,
   };
