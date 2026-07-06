@@ -225,7 +225,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=61').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=62').catch(() => {});
     }
   }
 
@@ -338,6 +338,9 @@
     for (const row of layout.rows) {
       main.appendChild(createShelfRow(row));
     }
+    if (layout.bottomPerimeter) {
+      main.appendChild(createBottomPerimeter(layout.bottomPerimeter));
+    }
 
     body.appendChild(leftCol);
     body.appendChild(main);
@@ -345,10 +348,6 @@
       body.appendChild(createZoneCell(registerZone.slotKey, registerZone.defaultName));
     }
     floor.appendChild(body);
-
-    if (layout.bottomPerimeter) {
-      floor.appendChild(createBottomPerimeter(layout.bottomPerimeter));
-    }
 
     root.appendChild(floor);
     updateShelfCells();
