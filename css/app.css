@@ -253,9 +253,65 @@ body {
 
 .store-body {
   display: grid;
-  grid-template-columns: 42px 1fr 42px;
+  grid-template-columns: 48px 1fr 42px;
   gap: 4px;
   align-items: stretch;
+}
+
+.store-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.store-perimeter-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.store-perimeter-top {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.store-perimeter-top__row {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 3px;
+}
+
+.store-perimeter-gap {
+  min-height: 28px;
+}
+
+.store-perimeter-bottom {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.shelf-cell--perimeter {
+  min-height: 28px;
+  padding: 2px 1px;
+}
+
+.shelf-cell--perimeter .shelf-cell__label {
+  font-size: 10px;
+}
+
+.store-left-col .shelf-cell--zone {
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
+.store-perimeter-left .shelf-cell--perimeter {
+  flex: 1;
+  min-height: 0;
 }
 
 .store-main {

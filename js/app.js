@@ -225,7 +225,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=58').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=59').catch(() => {});
     }
   }
 
@@ -233,10 +233,9 @@
     const layout = getActiveLayout();
     const version = await DB.getLayoutVersion();
     const slots = getAllSlots();
+    await DB.syncShelvesFromTemplate(slots);
     if (version !== layout.version) {
-      await DB.syncShelvesFromTemplate(slots, { reset: true, layoutVersion: layout.version });
-    } else {
-      await DB.syncShelvesFromTemplate(slots);
+      await DB.setLayoutVersion(layout.version);
     }
   }
 
@@ -314,32 +313,107 @@
     const floor = document.createElement('div');
     floor.className = 'store-floor';
 
-    const chilled = createZoneCell('chilled', 'チルド');
-    chilled.classList.add('store-entrance');
-    floor.appendChild(chilled);
+    const chilledZone = layout.zones.find((z) => z.placement === 'entrance');
+    const walkinZone = layout.zones.find((z) => z.placement === 'left');
+    const registerZone = layout.zones.find((z) => z.placement === 'right');
+    const bookshelfZone = layout.zones.find((z) => z.placement === 'footer');
+
+    if (chilledZone) {
+      const chilled = createZoneCell(chilledZone.slotKey, chilledZone.defaultName);
+      chilled.classList.add('store-entrance');
+      floor.appendChild(chilled);
+    }
+
+    if (layout.topPerimeter) {
+      floor.appendChild(createTopPerimeter(layout.topPerimeter));
+    }
 
     const body = document.createElement('div');
     body.className = 'store-body';
 
-    const walkin = createZoneCell('walkin', 'ウォークイン');
+    const leftCol = document.createElement('div');
+    leftCol.className = 'store-left-col';
+    if (walkinZone) {
+      leftCol.appendChild(createZoneCell(walkinZone.slotKey, walkinZone.defaultName));
+    }
+    if (layout.leftPerimeter) {
+      const leftStack = document.createElement('div');
+      leftStack.className = 'store-perimeter-left';
+      for (const cell of layout.leftPerimeter) {
+        leftStack.appendChild(createPerimeterCell(cell.slotKey, cell.defaultName));
+      }
+      leftCol.appendChild(leftStack);
+    }
+
     const main = document.createElement('div');
     main.className = 'store-main';
-    const register = createZoneCell('register', 'レジ');
-
     for (const row of layout.rows) {
       main.appendChild(createShelfRow(row));
     }
 
-    body.appendChild(walkin);
+    body.appendChild(leftCol);
     body.appendChild(main);
-    body.appendChild(register);
+    if (registerZone) {
+      body.appendChild(createZoneCell(registerZone.slotKey, registerZone.defaultName));
+    }
     floor.appendChild(body);
 
-    const bookshelf = createZoneCell('bookshelf', '本棚', true);
-    floor.appendChild(bookshelf);
+    if (layout.bottomPerimeter) {
+      floor.appendChild(createBottomPerimeter(layout.bottomPerimeter));
+    }
+
+    if (bookshelfZone) {
+      const bookshelf = createZoneCell(bookshelfZone.slotKey, bookshelfZone.defaultName, true);
+      floor.appendChild(bookshelf);
+    }
 
     root.appendChild(floor);
     updateShelfCells();
+  }
+
+  function createTopPerimeter(top) {
+    const wrap = document.createElement('div');
+    wrap.className = 'store-perimeter-top';
+    wrap.appendChild(createPerimeterCell(top.leading.slotKey, top.leading.defaultName));
+    const row = document.createElement('div');
+    row.className = 'store-perimeter-top__row';
+    for (const cell of top.cells) {
+      if (cell.gap) {
+        const gap = document.createElement('div');
+        gap.className = 'store-perimeter-gap';
+        gap.setAttribute('aria-hidden', 'true');
+        row.appendChild(gap);
+      } else {
+        row.appendChild(createPerimeterCell(cell.slotKey, cell.defaultName));
+      }
+    }
+    wrap.appendChild(row);
+    return wrap;
+  }
+
+  function createBottomPerimeter(cells) {
+    const row = document.createElement('div');
+    row.className = 'store-perimeter-bottom';
+    for (const cell of cells) {
+      row.appendChild(createPerimeterCell(cell.slotKey, cell.defaultName));
+    }
+    return row;
+  }
+
+  function createPerimeterCell(slotKey, fallbackName) {
+    const shelf = state.shelfMap[slotKey];
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'shelf-cell shelf-cell--perimeter';
+    el.dataset.slotKey = slotKey;
+    const name = shelf?.name || fallbackName;
+    el.innerHTML = `
+      <span class="shelf-cell__label">${escapeHtml(shortenName(name))}</span>
+      <span class="shelf-cell__badge"></span>
+      <span class="shelf-cell__check">✓</span>
+    `;
+    bindShelfCell(el, slotKey);
+    return el;
   }
 
   function createZoneCell(zone, fallbackLabel, horizontal) {
