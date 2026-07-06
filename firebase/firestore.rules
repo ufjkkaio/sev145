@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /stores/{storeId} {
+      allow create: if request.auth != null
+        && request.resource.data.authUid == request.auth.uid;
+      allow read, update, delete: if request.auth != null
+        && resource.data.authUid == request.auth.uid;
+
+      match /shelves/{shelfId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/stores/$(storeId)).data.authUid == request.auth.uid;
+      }
+      match /photos/{photoId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/stores/$(storeId)).data.authUid == request.auth.uid;
+      }
+    }
+  }
+}

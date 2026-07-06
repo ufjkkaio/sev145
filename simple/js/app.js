@@ -57,9 +57,25 @@
     resetDialog: $('#reset-dialog'),
     btnResetCancel: $('#btn-reset-cancel'),
     btnResetOk: $('#btn-reset-ok'),
-    storeSetupDialog: $('#store-setup-dialog'),
-    storeNameInput: $('#store-name-input'),
-    btnStoreSetupOk: $('#btn-store-setup-ok'),
+    authGate: $('#auth-gate'),
+    authError: $('#auth-error'),
+    authPanelHome: $('#auth-panel-home'),
+    authPanelLogin: $('#auth-panel-login'),
+    authPanelRegister: $('#auth-panel-register'),
+    authPanelQr: $('#auth-panel-qr'),
+    authPanelCreated: $('#auth-panel-created'),
+    authLoginNumber: $('#auth-login-number'),
+    authLoginPass: $('#auth-login-pass'),
+    authRegNumber: $('#auth-reg-number'),
+    authRegName: $('#auth-reg-name'),
+    authQrFile: $('#auth-qr-file'),
+    authCreatedNumber: $('#auth-created-number'),
+    authCreatedPass: $('#auth-created-pass'),
+    authCreatedQr: $('#auth-created-qr'),
+    btnStoreSwitch: $('#btn-store-switch'),
+    storeSwitchDialog: $('#store-switch-dialog'),
+    storeSwitchList: $('#store-switch-list'),
+    appRoot: $('#app'),
     photoViewer: $('#photo-viewer'),
     viewerImage: $('#viewer-image'),
     btnViewerClose: $('#btn-viewer-close'),
@@ -108,6 +124,32 @@
     registerServiceWorker();
     showBuildVersion();
     bindEvents();
+
+    try {
+      let entry = await CloudAuth.tryLoginFromUrl();
+      if (!entry) entry = await CloudAuth.restoreSession();
+      if (!entry) {
+        showAuthHub('home');
+        return;
+      }
+      await bootApp();
+    } catch (err) {
+      console.error(err);
+      showAuthHub('login', err.message || '接続に失敗しました');
+    }
+  }
+
+  async function bootApp() {
+    hideAuthHub();
+    CloudDB.stopSync();
+    CloudDB.setOnChange(() => {
+      refresh().then(() => {
+        updateShelfCells();
+        if (!state.drag && !state.pan) renderBoard();
+      });
+    });
+    CloudDB.startSync();
+
     state.board = await DB.getBoardLayout();
     state.view = await DB.getBoardView();
     state.view.scale = clampScale(state.view.scale ?? 1);
@@ -119,10 +161,160 @@
     if (isLegacyTopLeft) {
       centerBoardView({ scale: state.view.scale, save: true });
     }
-    if (!(await DB.getStoreName())) {
-      els.storeSetupDialog.hidden = false;
-      els.storeNameInput.focus();
+  }
+
+  function showAuthError(msg) {
+    if (!msg) {
+      els.authError.hidden = true;
+      els.authError.textContent = '';
+      return;
     }
+    els.authError.hidden = false;
+    els.authError.textContent = msg;
+  }
+
+  function showAuthPanel(name) {
+    const panels = {
+      home: els.authPanelHome,
+      login: els.authPanelLogin,
+      register: els.authPanelRegister,
+      qr: els.authPanelQr,
+      created: els.authPanelCreated,
+    };
+    Object.values(panels).forEach((p) => { if (p) p.hidden = true; });
+    if (panels[name]) panels[name].hidden = false;
+  }
+
+  function showAuthHub(panel = 'home', errorMsg = '') {
+    if (els.appRoot) els.appRoot.hidden = true;
+    if (els.authGate) els.authGate.hidden = false;
+    showAuthPanel(panel);
+    showAuthError(errorMsg);
+  }
+
+  function hideAuthHub() {
+    if (els.authGate) els.authGate.hidden = true;
+    if (els.appRoot) els.appRoot.hidden = false;
+    showAuthError('');
+  }
+
+  async function renderCreatedQr(storeNumber, passphrase) {
+    const payload = CloudAuth.buildQrPayload(storeNumber, passphrase);
+    if (els.authCreatedNumber) els.authCreatedNumber.textContent = storeNumber;
+    if (els.authCreatedPass) els.authCreatedPass.textContent = passphrase;
+    if (els.authCreatedQr && window.QRCode) {
+      await QRCode.toCanvas(els.authCreatedQr, payload, { width: 200, margin: 2 });
+    }
+  }
+
+  function bindAuthEvents() {
+    $('#btn-auth-login')?.addEventListener('click', () => {
+      showAuthError('');
+      showAuthPanel('login');
+    });
+    $('#btn-auth-register')?.addEventListener('click', () => {
+      showAuthError('');
+      showAuthPanel('register');
+    });
+    $('#btn-auth-qr')?.addEventListener('click', () => {
+      showAuthError('');
+      showAuthPanel('qr');
+    });
+    $('#btn-auth-login-back')?.addEventListener('click', () => showAuthPanel('home'));
+    $('#btn-auth-reg-back')?.addEventListener('click', () => showAuthPanel('home'));
+    $('#btn-auth-qr-back')?.addEventListener('click', () => showAuthPanel('home'));
+
+    $('#btn-auth-login-go')?.addEventListener('click', async () => {
+      try {
+        showAuthError('');
+        await CloudAuth.login(els.authLoginNumber.value, els.authLoginPass.value);
+        await bootApp();
+      } catch (err) {
+        showAuthError(err.message);
+      }
+    });
+
+    $('#btn-auth-reg-go')?.addEventListener('click', async () => {
+      try {
+        showAuthError('');
+        const result = await CloudAuth.register(els.authRegNumber.value, els.authRegName.value);
+        await renderCreatedQr(result.entry.storeNumber, result.passphrase);
+        showAuthPanel('created');
+      } catch (err) {
+        showAuthError(err.message);
+      }
+    });
+
+    $('#btn-auth-created-go')?.addEventListener('click', async () => {
+      try {
+        await bootApp();
+      } catch (err) {
+        showAuthError(err.message);
+        showAuthPanel('home');
+      }
+    });
+
+    $('#btn-auth-qr-pick')?.addEventListener('click', () => els.authQrFile?.click());
+    els.authQrFile?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      try {
+        showAuthError('');
+        const text = await decodeQrFromFile(file);
+        await CloudAuth.loginFromQr(text);
+        await bootApp();
+      } catch (err) {
+        showAuthError(err.message);
+      }
+    });
+
+    els.btnStoreSwitch?.addEventListener('click', openStoreSwitchDialog);
+    $('#btn-store-switch-close')?.addEventListener('click', () => {
+      els.storeSwitchDialog.hidden = true;
+    });
+    $('#btn-store-switch-add')?.addEventListener('click', () => {
+      els.storeSwitchDialog.hidden = true;
+      showAuthHub('login');
+    });
+  }
+
+  async function decodeQrFromFile(file) {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (!code?.data) throw new Error('QRコードが見つかりませんでした');
+    return code.data;
+  }
+
+  function openStoreSwitchDialog() {
+    const stores = CloudAuth.getSavedStores();
+    const current = CloudAuth.getCurrentStoreId();
+    els.storeSwitchList.innerHTML = '';
+    for (const s of stores) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'store-switch-item';
+      if (s.storeId === current) btn.classList.add('store-switch-item--active');
+      btn.innerHTML = `<span class="store-switch-item__name">${escapeHtml(s.displayName)}</span><span class="store-switch-item__num">${escapeHtml(s.storeNumber)}</span>`;
+      btn.addEventListener('click', async () => {
+        try {
+          els.storeSwitchDialog.hidden = true;
+          await CloudAuth.switchStore(s.storeId);
+          await bootApp();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+      els.storeSwitchList.appendChild(btn);
+    }
+    els.storeSwitchDialog.hidden = false;
   }
 
   function showBuildVersion() {
@@ -165,6 +357,7 @@
   }
 
   function bindEvents() {
+    bindAuthEvents();
     els.btnLayoutEdit.addEventListener('click', toggleLayoutEditMode);
     els.btnEditMode.addEventListener('click', toggleEditMode);
     els.btnAddShelf.addEventListener('click', addShelfBlock);
@@ -189,10 +382,6 @@
     els.btnReset.addEventListener('click', () => { els.resetDialog.hidden = false; });
     els.btnResetCancel.addEventListener('click', () => { els.resetDialog.hidden = true; });
     els.btnResetOk.addEventListener('click', handleReset);
-    els.btnStoreSetupOk.addEventListener('click', handleStoreSetup);
-    els.storeNameInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') handleStoreSetup();
-    });
     els.btnViewerClose.addEventListener('click', closePhotoViewer);
     els.btnViewerDelete.addEventListener('click', showDeleteConfirm);
     els.btnViewerDeleteCancel.addEventListener('click', hideDeleteConfirm);
@@ -435,17 +624,6 @@
 
   function m() {
     return state.metrics || computeMetrics();
-  }
-
-  async function handleStoreSetup() {
-    const name = els.storeNameInput.value.trim();
-    if (!name) {
-      els.storeNameInput.focus();
-      return;
-    }
-    await DB.setStoreName(name);
-    els.storeSetupDialog.hidden = true;
-    updateHeader();
   }
 
   function toggleLayoutEditMode() {

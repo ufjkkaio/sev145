@@ -11,8 +11,8 @@
   <title>棚清掃</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="../icons/icon-192.png">
-  <link rel="stylesheet" href="../css/app.css?v=52">
-  <link rel="stylesheet" href="css/simple.css?v=52">
+  <link rel="stylesheet" href="../css/app.css?v=53">
+  <link rel="stylesheet" href="css/simple.css?v=53">
 </head>
 <body>
   <div id="app">
@@ -24,6 +24,7 @@
         <h1 class="header__title">棚清掃 <span id="app-version" class="app-version"></span></h1>
       </div>
       <div class="header__actions">
+        <button type="button" id="btn-store-switch" class="btn btn--ghost">店舗</button>
         <button type="button" id="btn-layout-edit" class="btn btn--ghost" aria-pressed="false">レイアウト</button>
         <button type="button" id="btn-edit-mode" class="btn btn--ghost" aria-pressed="false">名称編集</button>
         <button type="button" id="btn-reset" class="btn btn--header-reset">リセット</button>
@@ -117,12 +118,65 @@
       </div>
     </div>
 
-    <div id="store-setup-dialog" class="dialog-overlay" hidden>
+    <div id="auth-gate" class="auth-gate" hidden>
+      <div class="auth-gate__card">
+        <h2 class="auth-gate__title">棚清掃</h2>
+        <p id="auth-error" class="auth-gate__error" hidden></p>
+
+        <div id="auth-panel-home" class="auth-panel">
+          <button type="button" id="btn-auth-login" class="btn btn--primary auth-gate__btn">店舗に入る</button>
+          <button type="button" id="btn-auth-register" class="btn btn--ghost auth-gate__btn">新しい店舗を作る</button>
+          <button type="button" id="btn-auth-qr" class="btn btn--ghost auth-gate__btn">QRで入る</button>
+        </div>
+
+        <div id="auth-panel-login" class="auth-panel" hidden>
+          <label class="auth-gate__label">店番号（6桁）</label>
+          <input type="text" id="auth-login-number" class="dialog__input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="123456">
+          <label class="auth-gate__label">合言葉</label>
+          <input type="text" id="auth-login-pass" class="dialog__input" autocomplete="off" placeholder="合言葉">
+          <div class="dialog__actions">
+            <button type="button" id="btn-auth-login-back" class="btn btn--ghost">戻る</button>
+            <button type="button" id="btn-auth-login-go" class="btn btn--primary">入る</button>
+          </div>
+        </div>
+
+        <div id="auth-panel-register" class="auth-panel" hidden>
+          <label class="auth-gate__label">店番号（6桁）</label>
+          <input type="text" id="auth-reg-number" class="dialog__input" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="123456">
+          <label class="auth-gate__label">店舗名（表示用）</label>
+          <input type="text" id="auth-reg-name" class="dialog__input" maxlength="20" autocomplete="off" placeholder="例：〇〇店">
+          <div class="dialog__actions">
+            <button type="button" id="btn-auth-reg-back" class="btn btn--ghost">戻る</button>
+            <button type="button" id="btn-auth-reg-go" class="btn btn--primary">作成</button>
+          </div>
+        </div>
+
+        <div id="auth-panel-qr" class="auth-panel" hidden>
+          <p class="auth-gate__hint">QRコードの画像を選ぶか、カメラで読み取ってください</p>
+          <input type="file" id="auth-qr-file" accept="image/*" hidden>
+          <button type="button" id="btn-auth-qr-pick" class="btn btn--ghost auth-gate__btn">QR画像を選ぶ</button>
+          <div class="dialog__actions">
+            <button type="button" id="btn-auth-qr-back" class="btn btn--ghost">戻る</button>
+          </div>
+        </div>
+
+        <div id="auth-panel-created" class="auth-panel" hidden>
+          <p class="auth-gate__hint">以下をメモするか、QRを保存してください（再表示できません）</p>
+          <p class="auth-created__row"><strong>店番号</strong> <span id="auth-created-number"></span></p>
+          <p class="auth-created__row"><strong>合言葉</strong> <span id="auth-created-pass"></span></p>
+          <canvas id="auth-created-qr" class="auth-created__qr"></canvas>
+          <button type="button" id="btn-auth-created-go" class="btn btn--primary auth-gate__btn">はじめる</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="store-switch-dialog" class="dialog-overlay" hidden>
       <div class="dialog" role="dialog">
-        <h3 class="dialog__title">店舗名を入力</h3>
-        <input type="text" id="store-name-input" class="dialog__input" placeholder="例：123号店" maxlength="20" autocomplete="off">
+        <h3 class="dialog__title">店舗を切り替え</h3>
+        <div id="store-switch-list" class="store-switch-list"></div>
+        <button type="button" id="btn-store-switch-add" class="btn btn--ghost auth-gate__btn">店舗を追加</button>
         <div class="dialog__actions">
-          <button type="button" id="btn-store-setup-ok" class="btn btn--primary">はじめる</button>
+          <button type="button" id="btn-store-switch-close" class="btn btn--ghost">閉じる</button>
         </div>
       </div>
     </div>
@@ -162,7 +216,17 @@
     </div>
   </div>
 
-  <script src="js/db.js?v=52"></script>
-  <script src="js/app.js?v=52"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="../js/firebase-config.js?v=53"></script>
+  <script src="../js/firebase-boot.js?v=53"></script>
+  <script src="../js/cloud-auth.js?v=53"></script>
+  <script src="../js/cloud-db.js?v=53"></script>
+  <script src="js/db.js?v=53"></script>
+  <script src="js/app.js?v=53"></script>
 </body>
 </html>

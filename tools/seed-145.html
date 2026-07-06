@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>145号店 クラウド初期設定</title>
+  <style>
+    body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+    input, button { font-size: 16px; padding: 10px; width: 100%; margin: 8px 0; box-sizing: border-box; }
+    #result { margin-top: 20px; padding: 16px; background: #e8f5e9; border-radius: 8px; word-break: break-all; }
+    canvas { display: block; margin: 16px auto; }
+  </style>
+</head>
+<body>
+  <h1>145号店（528089）初期設定</h1>
+  <p>1回だけ実行してください。店舗名を入力して作成します。</p>
+  <label>店舗名（表示用）</label>
+  <input id="name" value="145号店" maxlength="20">
+  <button id="go" type="button">店舗を作成</button>
+  <div id="result" hidden></div>
+  <canvas id="qr" hidden></canvas>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="../js/firebase-config.js"></script>
+  <script src="../js/firebase-boot.js"></script>
+  <script src="../js/cloud-auth.js"></script>
+  <script>
+    const STORE_NUMBER = '528089';
+    document.getElementById('go').onclick = async () => {
+      const name = document.getElementById('name').value.trim();
+      const btn = document.getElementById('go');
+      btn.disabled = true;
+      try {
+        const { entry, passphrase } = await CloudAuth.register(STORE_NUMBER, name, {
+          layoutType: 'fixed-145',
+          blockReserved: false,
+        });
+        const payload = CloudAuth.buildQrPayload(entry.storeNumber, passphrase);
+        await QRCode.toCanvas(document.getElementById('qr'), payload, { width: 220 });
+        document.getElementById('qr').hidden = false;
+        document.getElementById('result').hidden = false;
+        document.getElementById('result').innerHTML =
+          `<p><strong>店番号</strong> ${entry.storeNumber}</p>` +
+          `<p><strong>合言葉</strong> ${passphrase}</p>` +
+          `<p>QRを保存して / と /simple/ から入れます。</p>`;
+      } catch (e) {
+        alert(e.message);
+        btn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
