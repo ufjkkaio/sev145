@@ -253,29 +253,15 @@ body {
 
 .store-body {
   display: grid;
-  grid-template-columns: 1fr 42px;
+  grid-template-columns: 48px 1fr 42px;
   gap: 4px;
   align-items: stretch;
 }
 
-.store-center {
+.store-left-col {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.store-aisle-wrap {
-  display: grid;
-  grid-template-columns: 1fr 11fr;
-  gap: 3px;
-  align-items: stretch;
-}
-
-.store-aisle-left {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -283,29 +269,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
-}
-
-.store-aisle-left-spacer {
   flex: 1;
-  min-height: 6px;
-}
-
-.store-aisle-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.store-aisle-bottom {
-  display: grid;
-  grid-template-columns: 1fr 11fr;
-  gap: 3px;
-  align-items: stretch;
-}
-
-.store-aisle-bottom-spacer {
-  min-height: 28px;
 }
 
 .store-perimeter-top__row {
@@ -338,9 +302,14 @@ body {
   font-size: 10px;
 }
 
+.store-left-col .shelf-cell--zone {
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
 .store-perimeter-left .shelf-cell--perimeter {
   flex: 1;
-  min-height: 24px;
+  min-height: 0;
 }
 
 .store-main {

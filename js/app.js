@@ -225,7 +225,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=65').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=64').catch(() => {});
     }
   }
 
@@ -322,49 +322,28 @@
     const body = document.createElement('div');
     body.className = 'store-body';
 
-    const center = document.createElement('div');
-    center.className = 'store-center';
-
-    const aisleWrap = document.createElement('div');
-    aisleWrap.className = 'store-aisle-wrap';
-
-    const aisleLeft = document.createElement('div');
-    aisleLeft.className = 'store-aisle-left';
+    const leftCol = document.createElement('div');
+    leftCol.className = 'store-left-col';
     if (layout.leftPerimeter) {
       const leftStack = document.createElement('div');
       leftStack.className = 'store-perimeter-left';
       for (const cell of layout.leftPerimeter) {
         leftStack.appendChild(createPerimeterCell(cell.slotKey, cell.defaultName));
       }
-      aisleLeft.appendChild(leftStack);
-      const leftSpacer = document.createElement('div');
-      leftSpacer.className = 'store-aisle-left-spacer';
-      leftSpacer.setAttribute('aria-hidden', 'true');
-      aisleLeft.appendChild(leftSpacer);
+      leftCol.appendChild(leftStack);
     }
 
-    const aisleRows = document.createElement('div');
-    aisleRows.className = 'store-aisle-rows';
+    const main = document.createElement('div');
+    main.className = 'store-main';
     for (const row of layout.rows) {
-      aisleRows.appendChild(createShelfRow(row));
+      main.appendChild(createShelfRow(row));
     }
-
-    aisleWrap.appendChild(aisleLeft);
-    aisleWrap.appendChild(aisleRows);
-    center.appendChild(aisleWrap);
-
     if (layout.bottomPerimeter) {
-      const bottomWrap = document.createElement('div');
-      bottomWrap.className = 'store-aisle-bottom';
-      const bottomSpacer = document.createElement('div');
-      bottomSpacer.className = 'store-aisle-bottom-spacer';
-      bottomSpacer.setAttribute('aria-hidden', 'true');
-      bottomWrap.appendChild(bottomSpacer);
-      bottomWrap.appendChild(createBottomPerimeter(layout.bottomPerimeter));
-      center.appendChild(bottomWrap);
+      main.appendChild(createBottomPerimeter(layout.bottomPerimeter));
     }
 
-    body.appendChild(center);
+    body.appendChild(leftCol);
+    body.appendChild(main);
     if (registerZone) {
       body.appendChild(createZoneCell(registerZone.slotKey, registerZone.defaultName));
     }
