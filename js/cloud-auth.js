@@ -73,6 +73,22 @@ const CloudAuth = (function () {
     return currentStoreMeta;
   }
 
+  async function loginDocId(storeNumber, passphrase) {
+    const data = new TextEncoder().encode(`${storeNumber}:${passphrase}`);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function writeLoginIndex(storeNumber, passphrase, storeId, authEmail) {
+    const id = await loginDocId(storeNumber, passphrase);
+    await FirebaseBoot.db.collection('storeLogins').doc(id).set({
+      storeId,
+      authEmail,
+      storeNumber,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
   async function signInStore(entry) {
     const { auth } = FirebaseBoot;
     await auth.signOut();
@@ -84,30 +100,6 @@ const CloudAuth = (function () {
     return entry;
   }
 
-  async function tryLoginCandidate(storeNumber, passphrase, doc) {
-    const storeId = doc.id;
-    const data = doc.data();
-    const authEmail = data.authEmail || authEmailForStore(storeId);
-    try {
-      await FirebaseBoot.auth.signInWithEmailAndPassword(authEmail, passphrase);
-      const entry = {
-        storeId,
-        storeNumber: data.storeNumber,
-        displayName: data.displayName || data.storeNumber,
-        authEmail,
-        passphrase,
-        layoutType: data.layoutType || 'whiteboard',
-      };
-      currentStoreId = storeId;
-      currentStoreMeta = data;
-      upsertSession(entry);
-      return entry;
-    } catch {
-      await FirebaseBoot.auth.signOut();
-      return null;
-    }
-  }
-
   async function login(storeNumber, passphrase) {
     const num = normalizeStoreNumber(storeNumber);
     if (!isValidStoreNumber(num)) {
@@ -115,17 +107,36 @@ const CloudAuth = (function () {
     }
     if (!passphrase) throw new Error('合言葉を入力してください');
 
-    const snap = await FirebaseBoot.db.collection('stores')
-      .where('storeNumber', '==', num)
-      .get();
-
-    if (snap.empty) throw new Error('店番号または合言葉が正しくありません');
-
-    for (const doc of snap.docs) {
-      const hit = await tryLoginCandidate(num, passphrase, doc);
-      if (hit) return hit;
+    const loginId = await loginDocId(num, passphrase);
+    const loginSnap = await FirebaseBoot.db.collection('storeLogins').doc(loginId).get();
+    if (!loginSnap.exists) {
+      throw new Error('店番号または合言葉が正しくありません');
     }
-    throw new Error('店番号または合言葉が正しくありません');
+
+    const hint = loginSnap.data();
+    try {
+      await FirebaseBoot.auth.signInWithEmailAndPassword(hint.authEmail, passphrase);
+    } catch {
+      throw new Error('店番号または合言葉が正しくありません');
+    }
+
+    const storeSnap = await FirebaseBoot.db.collection('stores').doc(hint.storeId).get();
+    if (!storeSnap.exists) {
+      throw new Error('店舗データが見つかりません。管理者に連絡してください');
+    }
+    const data = storeSnap.data();
+    const entry = {
+      storeId: hint.storeId,
+      storeNumber: data.storeNumber,
+      displayName: data.displayName || data.storeNumber,
+      authEmail: hint.authEmail,
+      passphrase,
+      layoutType: data.layoutType || 'whiteboard',
+    };
+    currentStoreId = entry.storeId;
+    currentStoreMeta = data;
+    upsertSession(entry);
+    return entry;
   }
 
   async function register(storeNumber, displayName, options = {}) {
@@ -162,6 +173,7 @@ const CloudAuth = (function () {
     };
 
     await FirebaseBoot.db.collection('stores').doc(storeId).set(storeDoc);
+    await writeLoginIndex(num, passphrase, storeId, authEmail);
 
     const entry = {
       storeId,

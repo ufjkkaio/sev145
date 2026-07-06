@@ -1,6 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 店番号+合言葉のハッシュをキーにしたログイン用索引（ドキュメントID自体が秘密）
+    match /storeLogins/{loginId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
     match /stores/{storeId} {
       allow create: if request.auth != null
         && request.resource.data.authUid == request.auth.uid;

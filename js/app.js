@@ -83,7 +83,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=54').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=55').catch(() => {});
     }
   }
 
