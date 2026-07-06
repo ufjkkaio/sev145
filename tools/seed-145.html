@@ -9,6 +9,7 @@
     input, button { font-size: 16px; padding: 10px; width: 100%; margin: 8px 0; box-sizing: border-box; }
     #result { margin-top: 20px; padding: 16px; background: #e8f5e9; border-radius: 8px; word-break: break-all; }
     canvas { display: block; margin: 16px auto; }
+    .warn { color: #c62828; font-size: 0.9rem; }
   </style>
 </head>
 <body>
@@ -24,10 +25,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="../js/firebase-config.js"></script>
   <script src="../js/firebase-boot.js"></script>
   <script src="../js/cloud-auth.js"></script>
+  <script src="../js/qr-render.js"></script>
   <script>
     const STORE_NUMBER = '528089';
     document.getElementById('go').onclick = async () => {
@@ -40,15 +41,20 @@
           blockReserved: false,
         });
         const payload = CloudAuth.buildQrPayload(entry.storeNumber, passphrase);
-        await QRCode.toCanvas(document.getElementById('qr'), payload, { width: 220 });
-        document.getElementById('qr').hidden = false;
-        document.getElementById('result').hidden = false;
-        document.getElementById('result').innerHTML =
+        const resultEl = document.getElementById('result');
+        resultEl.hidden = false;
+        resultEl.innerHTML =
           `<p><strong>店番号</strong> ${entry.storeNumber}</p>` +
           `<p><strong>合言葉</strong> ${passphrase}</p>` +
-          `<p>QRを保存して / と /simple/ から入れます。</p>`;
+          `<p>必ずスクショで保存してください。</p>`;
+        try {
+          await QrRender.toCanvas(document.getElementById('qr'), payload, 220);
+          document.getElementById('qr').hidden = false;
+        } catch {
+          resultEl.innerHTML += '<p class="warn">QRは表示できませんでした。店番号と合言葉でログインできます。</p>';
+        }
       } catch (e) {
-        alert(e.message);
+        alert(e.message + '\n\n既に作成済みの場合は Firebase コンソールで確認するか、別途連絡してください。');
         btn.disabled = false;
       }
     };

@@ -202,8 +202,12 @@
     const payload = CloudAuth.buildQrPayload(storeNumber, passphrase);
     if (els.authCreatedNumber) els.authCreatedNumber.textContent = storeNumber;
     if (els.authCreatedPass) els.authCreatedPass.textContent = passphrase;
-    if (els.authCreatedQr && window.QRCode) {
-      await QRCode.toCanvas(els.authCreatedQr, payload, { width: 200, margin: 2 });
+    if (els.authCreatedQr) {
+      try {
+        await QrRender.toCanvas(els.authCreatedQr, payload, 200);
+      } catch {
+        /* QRなしでも店番号・合言葉は表示済み */
+      }
     }
   }
 
