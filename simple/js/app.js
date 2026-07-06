@@ -146,6 +146,7 @@
       refresh().then(() => {
         updateShelfCells();
         if (!state.drag && !state.pan) renderBoard();
+        if (state.currentShelfId) renderPhotos(state.currentShelfId);
       });
     });
     CloudDB.startSync();
@@ -1194,6 +1195,12 @@
     refresh();
   }
 
+  function getPhotoDisplayUrl(photo) {
+    if (photo.url) return photo.url;
+    if (photo.blob) return getPhotoObjectUrl(photo.id, photo.blob);
+    return '';
+  }
+
   function getPhotoObjectUrl(photoId, blob) {
     if (state.photoUrlById[photoId]) return state.photoUrlById[photoId];
     const url = URL.createObjectURL(blob);
@@ -1214,14 +1221,14 @@
   }
 
   function revokeAllPhotoUrls() {
-    Object.keys(state.photoUrlById).forEach((id) => revokePhotoUrl(Number(id)));
+    Object.keys(state.photoUrlById).forEach((id) => revokePhotoUrl(id));
   }
 
   async function renderPhotos(shelfId) {
     const photos = await DB.getPhotosByShelf(shelfId);
     const currentIds = new Set(photos.map((p) => p.id));
     for (const id of Object.keys(state.photoUrlById)) {
-      if (!currentIds.has(Number(id))) revokePhotoUrl(Number(id));
+      if (!currentIds.has(id)) revokePhotoUrl(id);
     }
 
     els.photoGrid.innerHTML = '';
@@ -1235,7 +1242,7 @@
 
     photos.sort((a, b) => a.createdAt - b.createdAt);
     for (const photo of photos) {
-      const url = getPhotoObjectUrl(photo.id, photo.blob);
+      const url = getPhotoDisplayUrl(photo);
       const item = document.createElement('div');
       item.className = 'photo-item';
       const date = new Date(photo.createdAt);
@@ -1303,7 +1310,7 @@
     const photo = await DB.getPhoto(photoId);
     if (!photo) return;
     state.viewingPhotoId = photoId;
-    els.viewerImage.src = getPhotoObjectUrl(photoId, photo.blob);
+    els.viewerImage.src = getPhotoDisplayUrl(photo);
     hideDeleteConfirm();
     openPhotoViewerElement();
     els.viewerAuthorInput.value = '';
@@ -1368,7 +1375,7 @@
     const photoId = state.viewingPhotoId;
     const photo = await DB.getPhoto(photoId);
     if (!photo) return;
-    const img = await loadImage(getPhotoObjectUrl(photoId, photo.blob));
+    const img = await loadImage(getPhotoDisplayUrl(photo));
     state.editor.open = true;
     state.editor.photoId = photoId;
     state.editor.img = img;
@@ -1518,6 +1525,7 @@
   function loadImage(url) {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      if (/^https?:/i.test(url)) img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('image load failed'));
       img.src = url;

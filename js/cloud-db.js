@@ -3,6 +3,7 @@ const CloudDB = (function () {
   'use strict';
 
   const blobCache = new Map();
+  const urlCache = new Map();
   let listeners = [];
   let onChangeCallback = null;
 
@@ -173,23 +174,37 @@ const CloudDB = (function () {
     };
   }
 
-  async function fetchPhotoBlob(photo) {
-    if (blobCache.has(photo.id)) return blobCache.get(photo.id);
+  function normalizeShelfId(shelfId) {
+    const n = Number(shelfId);
+    return Number.isFinite(n) ? n : shelfId;
+  }
+
+  async function getPhotoDownloadUrl(photo) {
+    if (urlCache.has(photo.id)) return urlCache.get(photo.id);
     const ref = FirebaseBoot.storage.ref(photo.storagePath);
     const url = await ref.getDownloadURL();
+    urlCache.set(photo.id, url);
+    return url;
+  }
+
+  async function fetchPhotoBlob(photo) {
+    if (blobCache.has(photo.id)) return blobCache.get(photo.id);
+    const url = await getPhotoDownloadUrl(photo);
     const res = await fetch(url);
+    if (!res.ok) throw new Error(`写真の取得に失敗しました (${res.status})`);
     const blob = await res.blob();
     blobCache.set(photo.id, blob);
     return blob;
   }
 
   async function getPhotosByShelf(shelfId) {
-    const snap = await photosCol().where('shelfId', '==', shelfId).get();
+    const sid = normalizeShelfId(shelfId);
+    const snap = await photosCol().where('shelfId', '==', sid).get();
     const rows = snap.docs.map(photoFromDoc);
-    return Promise.all(rows.map(async (p) => {
-      const blob = await fetchPhotoBlob(p);
-      return { ...p, blob };
-    }));
+    return Promise.all(rows.map(async (p) => ({
+      ...p,
+      url: await getPhotoDownloadUrl(p),
+    })));
   }
 
   async function compressImage(file, maxSide = 1600, quality = 0.82) {
@@ -218,15 +233,18 @@ const CloudDB = (function () {
     const path = `stores/${storeId}/photos/${photoId}.jpg`;
     const ref = FirebaseBoot.storage.ref(path);
     await ref.put(blob, { contentType: 'image/jpeg' });
+    const url = await ref.getDownloadURL();
+    const sid = normalizeShelfId(shelfId);
     const meta = {
       id: photoId,
-      shelfId,
+      shelfId: sid,
       author,
       createdAt: Date.now(),
       storagePath: path,
     };
     await photosCol().doc(photoId).set(meta);
     blobCache.set(photoId, blob);
+    urlCache.set(photoId, url);
     return photoId;
   }
 
@@ -235,10 +253,11 @@ const CloudDB = (function () {
       const ref = FirebaseBoot.storage.ref(photo.storagePath);
       await ref.put(photo.blob, { contentType: 'image/jpeg' });
       blobCache.set(photo.id, photo.blob);
+      urlCache.delete(photo.id);
     }
     await photosCol().doc(photo.id).set({
       id: photo.id,
-      shelfId: photo.shelfId,
+      shelfId: normalizeShelfId(photo.shelfId),
       author: photo.author || '',
       createdAt: photo.createdAt || Date.now(),
       storagePath: photo.storagePath,
@@ -260,14 +279,21 @@ const CloudDB = (function () {
       await photosCol().doc(id).delete();
     }
     blobCache.delete(id);
+    urlCache.delete(id);
   }
 
   async function getPhoto(id) {
     const snap = await photosCol().doc(id).get();
     if (!snap.exists) return null;
     const photo = photoFromDoc(snap);
-    const blob = await fetchPhotoBlob(photo);
-    return { ...photo, blob };
+    const url = await getPhotoDownloadUrl(photo);
+    return { ...photo, url };
+  }
+
+  async function getPhotoBlob(id) {
+    const snap = await photosCol().doc(id).get();
+    if (!snap.exists) return null;
+    return fetchPhotoBlob(photoFromDoc(snap));
   }
 
   async function syncShelvesFromBoard(board) {
@@ -307,7 +333,7 @@ const CloudDB = (function () {
     const shelves = await getAllShelves();
     const counts = {};
     await Promise.all(shelves.map(async (shelf) => {
-      const snap = await photosCol().where('shelfId', '==', shelf.id).get();
+      const snap = await photosCol().where('shelfId', '==', normalizeShelfId(shelf.id)).get();
       counts[shelf.id] = snap.size;
     }));
     return counts;
@@ -335,6 +361,7 @@ const CloudDB = (function () {
     updatePhoto,
     deletePhoto,
     getPhoto,
+    getPhotoBlob,
     syncShelvesFromBoard,
     resetAll,
     getPhotoCounts,
