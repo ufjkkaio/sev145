@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>145号店 クラウド初期設定</title>
   <style>
     body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
@@ -10,6 +13,7 @@
     #result { margin-top: 20px; padding: 16px; background: #e8f5e9; border-radius: 8px; word-break: break-all; }
     canvas { display: block; margin: 16px auto; }
     .warn { color: #c62828; font-size: 0.9rem; }
+    #status { color: #555; font-size: 0.9rem; min-height: 1.2em; }
   </style>
 </head>
 <body>
@@ -18,6 +22,7 @@
   <label>店舗名（表示用）</label>
   <input id="name" value="145号店" maxlength="20">
   <button id="go" type="button">店舗を作成</button>
+  <p id="status" aria-live="polite"></p>
   <div id="result" hidden></div>
   <canvas id="qr" hidden></canvas>
 
@@ -25,37 +30,55 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-  <script src="../js/firebase-config.js"></script>
-  <script src="../js/firebase-boot.js"></script>
-  <script src="../js/cloud-auth.js"></script>
-  <script src="../js/qr-render.js"></script>
+  <script src="../js/firebase-config.js?v=56"></script>
+  <script src="../js/firebase-boot.js?v=56"></script>
+  <script src="../js/cloud-auth.js?v=56"></script>
+  <script src="../js/qr-render.js?v=56"></script>
   <script>
     const STORE_NUMBER = '528089';
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const qrEl = document.getElementById('qr');
+
     document.getElementById('go').onclick = async () => {
       const name = document.getElementById('name').value.trim();
       const btn = document.getElementById('go');
       btn.disabled = true;
+      statusEl.textContent = '作成中…';
+      resultEl.hidden = true;
+      qrEl.hidden = true;
+
+      let entry;
+      let passphrase;
       try {
-        const { entry, passphrase } = await CloudAuth.register(STORE_NUMBER, name, {
+        ({ entry, passphrase } = await CloudAuth.register(STORE_NUMBER, name, {
           layoutType: 'fixed-145',
           blockReserved: false,
-        });
-        const payload = CloudAuth.buildQrPayload(entry.storeNumber, passphrase);
-        const resultEl = document.getElementById('result');
-        resultEl.hidden = false;
-        resultEl.innerHTML =
-          `<p><strong>店番号</strong> ${entry.storeNumber}</p>` +
-          `<p><strong>合言葉</strong> ${passphrase}</p>` +
-          `<p>必ずスクショで保存してください。</p>`;
-        try {
-          await QrRender.toCanvas(document.getElementById('qr'), payload, 220);
-          document.getElementById('qr').hidden = false;
-        } catch {
-          resultEl.innerHTML += '<p class="warn">QRは表示できませんでした。店番号と合言葉でログインできます。</p>';
-        }
+        }));
       } catch (e) {
-        alert(e.message + '\n\n既に作成済みの場合は Firebase コンソールで確認するか、別途連絡してください。');
+        statusEl.textContent = '';
+        alert(
+          (e && e.message ? e.message : '作成に失敗しました') +
+            '\n\n既に作成済みの場合は Firebase コンソールで確認するか、別途連絡してください。'
+        );
         btn.disabled = false;
+        return;
+      }
+
+      statusEl.textContent = '作成完了';
+      resultEl.hidden = false;
+      resultEl.innerHTML =
+        `<p><strong>店番号</strong> ${entry.storeNumber}</p>` +
+        `<p><strong>合言葉</strong> ${passphrase}</p>` +
+        `<p>必ずスクショで保存してください。</p>`;
+
+      try {
+        const payload = CloudAuth.buildQrPayload(entry.storeNumber, passphrase);
+        await QrRender.toCanvas(qrEl, payload, 220);
+        qrEl.hidden = false;
+      } catch {
+        resultEl.innerHTML +=
+          '<p class="warn">QRは表示できませんでした。店番号と合言葉でログインできます。</p>';
       }
     };
   </script>
