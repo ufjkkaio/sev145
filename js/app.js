@@ -225,7 +225,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=60').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=61').catch(() => {});
     }
   }
 
@@ -354,31 +354,36 @@
     updateShelfCells();
   }
 
+  function appendPerimeterGap(parent, size = 'full') {
+    const gap = document.createElement('div');
+    gap.className = 'store-perimeter-gap';
+    if (size === 'half') gap.classList.add('store-perimeter-gap--half');
+    gap.setAttribute('aria-hidden', 'true');
+    parent.appendChild(gap);
+  }
+
   function createTopPerimeter(top) {
-    const wrap = document.createElement('div');
-    wrap.className = 'store-perimeter-top';
-    wrap.appendChild(createPerimeterCell(top.leading.slotKey, top.leading.defaultName));
     const row = document.createElement('div');
     row.className = 'store-perimeter-top__row';
     for (const cell of top.cells) {
       if (cell.gap) {
-        const gap = document.createElement('div');
-        gap.className = 'store-perimeter-gap';
-        gap.setAttribute('aria-hidden', 'true');
-        row.appendChild(gap);
+        appendPerimeterGap(row, cell.gap === 'half' ? 'half' : 'full');
       } else {
         row.appendChild(createPerimeterCell(cell.slotKey, cell.defaultName));
       }
     }
-    wrap.appendChild(row);
-    return wrap;
+    return row;
   }
 
   function createBottomPerimeter(cells) {
     const row = document.createElement('div');
     row.className = 'store-perimeter-bottom';
     for (const cell of cells) {
-      row.appendChild(createPerimeterCell(cell.slotKey, cell.defaultName));
+      if (cell.gap) {
+        appendPerimeterGap(row, cell.gap === 'half' ? 'half' : 'full');
+      } else {
+        row.appendChild(createPerimeterCell(cell.slotKey, cell.defaultName));
+      }
     }
     return row;
   }

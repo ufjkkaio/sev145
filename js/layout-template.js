@@ -7,8 +7,9 @@ const LAYOUT_TEMPLATE = {
     { slotKey: 'register', defaultName: 'レジ', placement: 'right' },
   ],
   topPerimeter: {
-    leading: { slotKey: 's-48', defaultName: '48' },
     cells: [
+      { slotKey: 's-48', defaultName: '48' },
+      { gap: true },
       { slotKey: 's-50', defaultName: '49' },
       { slotKey: 's-51', defaultName: '50' },
       { slotKey: 's-52', defaultName: '51' },
@@ -34,6 +35,7 @@ const LAYOUT_TEMPLATE = {
   bottomPerimeter: [
     { slotKey: 's-67', defaultName: '66' },
     { slotKey: 's-68', defaultName: '67' },
+    { gap: 'half' },
     { slotKey: 's-69', defaultName: '68' },
     { slotKey: 's-70', defaultName: '69' },
     { slotKey: 's-71', defaultName: '70' },
@@ -118,11 +120,6 @@ function getAllSlots() {
   }
 
   const { topPerimeter, leftPerimeter, bottomPerimeter } = LAYOUT_TEMPLATE;
-  slots.push({
-    slotKey: topPerimeter.leading.slotKey,
-    defaultName: topPerimeter.leading.defaultName,
-    zone: 'perimeter-top',
-  });
   for (const cell of topPerimeter.cells) {
     if (!cell.gap) {
       slots.push({ slotKey: cell.slotKey, defaultName: cell.defaultName, zone: 'perimeter-top' });
@@ -132,7 +129,9 @@ function getAllSlots() {
     slots.push({ slotKey: cell.slotKey, defaultName: cell.defaultName, zone: 'perimeter-left' });
   }
   for (const cell of bottomPerimeter) {
-    slots.push({ slotKey: cell.slotKey, defaultName: cell.defaultName, zone: 'perimeter-bottom' });
+    if (!cell.gap) {
+      slots.push({ slotKey: cell.slotKey, defaultName: cell.defaultName, zone: 'perimeter-bottom' });
+    }
   }
 
   for (const row of LAYOUT_TEMPLATE.rows) {
