@@ -26,6 +26,7 @@
     btnFolderBack: $('#btn-folder-back'),
     folderTitle: $('#folder-title'),
     btnRenameShelf: $('#btn-rename-shelf'),
+    btnMoveAllPhotos: $('#btn-move-all-photos'),
     shelfChecked: $('#shelf-checked'),
     photoGrid: $('#photo-grid'),
     photoInputCamera: $('#photo-input-camera'),
@@ -45,6 +46,7 @@
     viewerAuthorInput: $('#viewer-author-input'),
     btnViewerSaveAuthor: $('#btn-viewer-save-author'),
     btnViewerEdit: $('#btn-viewer-edit'),
+    btnViewerMove: $('#btn-viewer-move'),
     photoDeleteConfirm: $('#photo-delete-confirm'),
     btnViewerDeleteCancel: $('#btn-viewer-delete-cancel'),
     btnViewerDeleteOk: $('#btn-viewer-delete-ok'),
@@ -53,6 +55,12 @@
     btnEditorBack: $('#btn-editor-back'),
     btnEditorSave: $('#btn-editor-save'),
     editorCanvas: $('#editor-canvas'),
+
+    moveShelfDialog: $('#move-shelf-dialog'),
+    moveShelfDialogTitle: $('#move-shelf-dialog-title'),
+    moveShelfDialogHint: $('#move-shelf-dialog-hint'),
+    moveShelfList: $('#move-shelf-list'),
+    btnMoveShelfCancel: $('#btn-move-shelf-cancel'),
   };
 
   let state = {
@@ -63,6 +71,7 @@
     photoUrlById: {},
     viewingPhotoId: null,
     nameDialogCallback: null,
+    moveShelfMode: null,
 
     editor: {
       open: false,
@@ -224,7 +233,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=t2').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=t3').catch(() => {});
     }
   }
 
@@ -260,6 +269,7 @@
     els.photoInputCamera.addEventListener('change', handlePhotoUpload);
     els.photoInputAlbum.addEventListener('change', handlePhotoUpload);
     els.btnRenameShelf.addEventListener('click', handleRenameShelf);
+    els.btnMoveAllPhotos.addEventListener('click', () => openMoveShelfDialog('all'));
 
     els.btnNameCancel.addEventListener('click', closeNameDialog);
     els.btnNameOk.addEventListener('click', confirmNameDialog);
@@ -277,6 +287,7 @@
     els.btnViewerDelete.addEventListener('click', showDeleteConfirm);
     els.btnViewerDeleteCancel.addEventListener('click', hideDeleteConfirm);
     els.btnViewerDeleteOk.addEventListener('click', handleDeletePhoto);
+    els.btnViewerMove.addEventListener('click', () => openMoveShelfDialog('photo'));
     els.btnViewerSaveAuthor.addEventListener('click', handleSaveViewerAuthor);
     els.btnViewerEdit.addEventListener('click', openPhotoEditor);
     els.viewerAuthorInput.addEventListener('keydown', (e) => {
@@ -293,6 +304,11 @@
     els.editorCanvas.addEventListener('pointermove', onEditorPointerMove);
     els.editorCanvas.addEventListener('pointerup', onEditorPointerUp);
     els.editorCanvas.addEventListener('pointercancel', onEditorPointerUp);
+
+    els.btnMoveShelfCancel.addEventListener('click', closeMoveShelfDialog);
+    els.moveShelfDialog.addEventListener('click', (e) => {
+      if (e.target === els.moveShelfDialog) closeMoveShelfDialog();
+    });
   }
 
   function toggleEditMode() {
@@ -542,6 +558,13 @@
     els.folderOverlay.hidden = false;
     document.body.style.overflow = 'hidden';
     await renderPhotos(shelfId);
+    updateMoveAllButton(shelfId);
+  }
+
+  async function updateMoveAllButton(shelfId) {
+    if (!els.btnMoveAllPhotos) return;
+    const photos = await DB.getPhotosByShelf(shelfId);
+    els.btnMoveAllPhotos.hidden = photos.length === 0;
   }
 
   function closeFolder() {
@@ -753,6 +776,106 @@
       state.photoCounts = await DB.getPhotoCounts();
       updateShelfCells();
       await renderPhotos(state.currentShelfId);
+      updateMoveAllButton(state.currentShelfId);
+    }
+  }
+
+  function sortShelvesForPicker(shelves) {
+    return [...shelves].sort((a, b) =>
+      a.name.localeCompare(b.name, 'ja', { numeric: true, sensitivity: 'base' }),
+    );
+  }
+
+  function closeMoveShelfDialog() {
+    if (els.moveShelfDialog) els.moveShelfDialog.hidden = true;
+    state.moveShelfMode = null;
+    if (els.moveShelfList) els.moveShelfList.innerHTML = '';
+  }
+
+  async function openMoveShelfDialog(mode) {
+    if (mode === 'photo' && !state.viewingPhotoId) return;
+    if (mode === 'all' && !state.currentShelfId) return;
+
+    const shelves = sortShelvesForPicker(await DB.getAllShelves());
+    const excludeId = state.currentShelfId;
+    const targets = shelves.filter((s) => s.id !== excludeId);
+    if (targets.length === 0) {
+      alert('移動先の棚がありません');
+      return;
+    }
+
+    state.moveShelfMode = mode;
+    if (els.moveShelfDialogTitle) {
+      els.moveShelfDialogTitle.textContent =
+        mode === 'all' ? 'すべて移動する棚を選ぶ' : 'この写真を移動する棚を選ぶ';
+    }
+    if (els.moveShelfDialogHint) {
+      const fromShelf = shelves.find((s) => s.id === excludeId);
+      const fromName = fromShelf?.name || 'この棚';
+      els.moveShelfDialogHint.textContent =
+        mode === 'all'
+          ? `「${fromName}」の写真をすべて移動します`
+          : `「${fromName}」から移動します`;
+    }
+
+    els.moveShelfList.innerHTML = '';
+    for (const shelf of targets) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'move-shelf-item';
+      btn.textContent = shelf.name;
+      btn.addEventListener('click', () => handleMoveToShelf(shelf));
+      els.moveShelfList.appendChild(btn);
+    }
+
+    els.moveShelfDialog.hidden = false;
+  }
+
+  async function handleMoveToShelf(targetShelf) {
+    const mode = state.moveShelfMode;
+    const fromShelfId = state.currentShelfId;
+    if (!mode || !fromShelfId) return;
+
+    const fromShelf = await DB.getShelf(fromShelfId);
+    const fromName = fromShelf?.name || 'この棚';
+    const toName = targetShelf.name;
+    const msg =
+      mode === 'all'
+        ? `「${fromName}」の写真をすべて「${toName}」へ移動しますか？`
+        : `この写真を「${toName}」へ移動しますか？`;
+    if (!confirm(msg)) return;
+
+    closeMoveShelfDialog();
+
+    try {
+      if (mode === 'all') {
+        const count = await DB.moveAllPhotos(fromShelfId, targetShelf.id);
+        if (count === 0) return;
+        await refresh();
+        await renderPhotos(fromShelfId);
+        updateMoveAllButton(fromShelfId);
+      } else {
+        const photoId = state.viewingPhotoId;
+        if (!photoId) return;
+        const author = els.viewerAuthorInput.value.trim().slice(0, PHOTO_AUTHOR_MAX);
+        if (author) {
+          const photo = await DB.getPhoto(photoId);
+          if (photo) {
+            photo.author = author;
+            delete photo.url;
+            delete photo.blob;
+            await DB.updatePhoto(photo);
+          }
+        }
+        closePhotoViewer();
+        await DB.movePhoto(photoId, targetShelf.id);
+        state.photoCounts = await DB.getPhotoCounts();
+        updateShelfCells();
+        await renderPhotos(fromShelfId);
+        updateMoveAllButton(fromShelfId);
+      }
+    } catch (err) {
+      alert(err.message || '移動に失敗しました');
     }
   }
 

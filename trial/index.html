@@ -11,7 +11,7 @@
   <title>【試用】店内棚 清掃管理</title>
   <link rel="apple-touch-icon" href="../icons/icon-192.png">
   <link rel="stylesheet" href="../css/app.css?v=64">
-  <link rel="stylesheet" href="css/trial.css?v=t2">
+  <link rel="stylesheet" href="css/trial.css?v=t3">
 </head>
 <body>
   <div id="auth-gate" class="auth-gate" hidden>
@@ -71,6 +71,7 @@
             <h2 id="folder-title" class="folder__title"></h2>
           </div>
           <button type="button" id="btn-rename-shelf" class="btn btn--ghost btn--sm">名称変更</button>
+          <button type="button" id="btn-move-all-photos" class="btn btn--ghost btn--sm" hidden>すべて移動</button>
         </div>
         <div class="folder__status">
           <label class="check-complete">
@@ -133,6 +134,7 @@
           <button type="button" id="btn-viewer-save-author" class="btn btn--primary photo-viewer__save-btn">名前を保存</button>
         </div>
         <div class="photo-viewer__actions">
+          <button type="button" id="btn-viewer-move" class="btn btn--ghost photo-viewer__move-btn">別の棚へ移動</button>
           <button type="button" id="btn-viewer-edit" class="btn btn--ghost photo-viewer__edit-btn">写真に書き込む</button>
           <button type="button" id="btn-viewer-delete" class="btn btn--danger photo-viewer__delete-btn">この写真を削除</button>
         </div>
@@ -142,6 +144,17 @@
             <button type="button" id="btn-viewer-delete-cancel" class="btn btn--ghost photo-viewer__confirm-btn">キャンセル</button>
             <button type="button" id="btn-viewer-delete-ok" class="btn btn--danger photo-viewer__confirm-btn">削除する</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="move-shelf-dialog" class="dialog-overlay" hidden>
+      <div class="dialog dialog--move-shelf" role="dialog" aria-labelledby="move-shelf-dialog-title">
+        <h3 id="move-shelf-dialog-title" class="dialog__title">移動先の棚を選ぶ</h3>
+        <p id="move-shelf-dialog-hint" class="dialog__message"></p>
+        <div id="move-shelf-list" class="move-shelf-list"></div>
+        <div class="dialog__actions">
+          <button type="button" id="btn-move-shelf-cancel" class="btn btn--ghost">キャンセル</button>
         </div>
       </div>
     </div>
@@ -169,7 +182,7 @@
   <script src="../js/cloud-auth.js?v=64"></script>
   <script src="../js/cloud-db.js?v=64"></script>
   <script src="../js/layout-template.js?v=64"></script>
-  <script src="js/db.js?v=t2"></script>
-  <script src="js/app.js?v=t2"></script>
+  <script src="js/db.js?v=t3"></script>
+  <script src="js/app.js?v=t3"></script>
 </body>
 </html>

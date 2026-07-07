@@ -16,3 +16,38 @@
 .header__title .app-version {
   color: #e65100;
 }
+
+.move-shelf-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: 12px 0 4px;
+}
+
+.move-shelf-item {
+  padding: 10px 6px;
+  border: 1.5px solid var(--color-border, #ccc);
+  border-radius: 8px;
+  background: #fffef5;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+  color: var(--color-text, #222);
+}
+
+.move-shelf-item:active {
+  transform: scale(0.97);
+  background: #fff8e1;
+}
+
+.dialog--move-shelf {
+  max-width: 360px;
+}
+
+.folder__header .btn--sm + .btn--sm {
+  margin-left: 4px;
+}
