@@ -48,6 +48,11 @@
   max-width: 360px;
 }
 
+/* 写真ビューア (z-index: 1000) より前面に表示 */
+#move-shelf-dialog.dialog-overlay {
+  z-index: 1100;
+}
+
 .folder__header .btn--sm + .btn--sm {
   margin-left: 4px;
 }

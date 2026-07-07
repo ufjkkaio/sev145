@@ -72,6 +72,7 @@
     viewingPhotoId: null,
     nameDialogCallback: null,
     moveShelfMode: null,
+    pendingMovePhotoId: null,
 
     editor: {
       open: false,
@@ -233,7 +234,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=t3').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=t4').catch(() => {});
     }
   }
 
@@ -789,6 +790,7 @@
   function closeMoveShelfDialog() {
     if (els.moveShelfDialog) els.moveShelfDialog.hidden = true;
     state.moveShelfMode = null;
+    state.pendingMovePhotoId = null;
     if (els.moveShelfList) els.moveShelfList.innerHTML = '';
   }
 
@@ -798,13 +800,16 @@
 
     const shelves = sortShelvesForPicker(await DB.getAllShelves());
     const excludeId = state.currentShelfId;
-    const targets = shelves.filter((s) => s.id !== excludeId);
+    const targets = shelves.filter((s) => Number(s.id) !== Number(excludeId));
     if (targets.length === 0) {
       alert('移動先の棚がありません');
       return;
     }
 
     state.moveShelfMode = mode;
+    if (mode === 'photo') {
+      state.pendingMovePhotoId = state.viewingPhotoId;
+    }
     if (els.moveShelfDialogTitle) {
       els.moveShelfDialogTitle.textContent =
         mode === 'all' ? 'すべて移動する棚を選ぶ' : 'この写真を移動する棚を選ぶ';
@@ -850,13 +855,20 @@
     try {
       if (mode === 'all') {
         const count = await DB.moveAllPhotos(fromShelfId, targetShelf.id);
-        if (count === 0) return;
+        if (count === 0) {
+          alert('移動する写真がありません');
+          return;
+        }
         await refresh();
         await renderPhotos(fromShelfId);
         updateMoveAllButton(fromShelfId);
+        alert(`「${toName}」へ ${count} 枚移動しました`);
       } else {
-        const photoId = state.viewingPhotoId;
-        if (!photoId) return;
+        const photoId = state.pendingMovePhotoId || state.viewingPhotoId;
+        if (!photoId) {
+          alert('移動する写真が見つかりません');
+          return;
+        }
         const author = els.viewerAuthorInput.value.trim().slice(0, PHOTO_AUTHOR_MAX);
         if (author) {
           const photo = await DB.getPhoto(photoId);
@@ -868,11 +880,13 @@
           }
         }
         closePhotoViewer();
+        state.pendingMovePhotoId = null;
         await DB.movePhoto(photoId, targetShelf.id);
         state.photoCounts = await DB.getPhotoCounts();
         updateShelfCells();
         await renderPhotos(fromShelfId);
         updateMoveAllButton(fromShelfId);
+        alert(`「${toName}」へ移動しました`);
       }
     } catch (err) {
       alert(err.message || '移動に失敗しました');

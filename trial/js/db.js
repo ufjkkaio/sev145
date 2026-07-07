@@ -4,7 +4,8 @@ window.DB = Object.assign({}, CloudDB, {
     const photo = await CloudDB.getPhoto(photoId);
     if (!photo) throw new Error('写真が見つかりません');
     const target = Number(targetShelfId);
-    if (photo.shelfId === target) return;
+    if (Number(photo.shelfId) === target) return;
+    if (!photo.storagePath) throw new Error('写真データが不完全です');
     photo.shelfId = target;
     delete photo.url;
     delete photo.blob;
