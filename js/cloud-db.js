@@ -25,13 +25,28 @@ const CloudDB = (function () {
     return storeRef().collection('auditLog');
   }
 
+  function formatAuditTime(date = new Date()) {
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date);
+  }
+
   async function writeAuditLog(action, details = {}) {
     try {
       const meta = CloudAuth.getCurrentStoreMeta();
+      const now = new Date();
       await auditLogCol().add({
         action,
         details,
-        at: Date.now(),
+        at: firebase.firestore.Timestamp.fromDate(now),
+        atText: formatAuditTime(now),
         storeNumber: meta?.storeNumber || '',
         app: typeof location !== 'undefined' ? location.pathname : '',
         uid: FirebaseBoot.auth.currentUser?.uid || '',

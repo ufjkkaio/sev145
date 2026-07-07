@@ -245,7 +245,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=t7').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=t8').catch(() => {});
     }
   }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shelf-cleaning-trial-v7';
+const CACHE_NAME = 'shelf-cleaning-trial-v8';
 const OFFLINE_ONLY = [
   '../icons/icon-192.png',
   '../icons/icon-512.png',
