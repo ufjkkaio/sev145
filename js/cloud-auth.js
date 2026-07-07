@@ -2,7 +2,7 @@
 const CloudAuth = (function () {
   'use strict';
 
-  const SESSION_KEY = 'tana-kanri-sessions';
+  const SESSION_KEY = window.TANA_KANRI_SESSION_KEY || 'tana-kanri-sessions';
   const RESERVED_ON_SIMPLE = new Set(['528089']);
   const PASS_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
 

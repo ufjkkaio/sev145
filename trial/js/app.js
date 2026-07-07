@@ -5,8 +5,8 @@
 
   const PHOTO_AUTHOR_MAX = 10;
   const PHOTO_AUTHOR_PLACEHOLDER = 'シフト　名前';
-  const LAST_AUTHOR_KEY = 'lastPhotographer';
-  const STORE_NUMBER = '528089';
+  const LAST_AUTHOR_KEY = 'lastPhotographer-trial';
+  const TRIAL_LAYOUT_TYPES = new Set(['fixed-145-trial']);
 
   const els = {
     appRoot: $('#app'),
@@ -92,7 +92,7 @@
     try {
       let entry = await CloudAuth.tryLoginFromUrl();
       if (!entry) entry = await CloudAuth.restoreSession();
-      if (entry) assert145Store(entry);
+      if (entry) assertTrialStore(entry);
       if (!entry) {
         showAuthHub('home');
         return;
@@ -104,17 +104,16 @@
     }
   }
 
-  function assert145Store(entry) {
+  function assertTrialStore(entry) {
     const meta = CloudAuth.getCurrentStoreMeta();
     const layoutType = meta?.layoutType || entry?.layoutType;
-    const storeNumber = meta?.storeNumber || entry?.storeNumber;
-    if (layoutType !== 'fixed-145' && storeNumber !== STORE_NUMBER) {
-      throw new Error('145号店（528089）の合言葉でログインしてください');
+    if (!TRIAL_LAYOUT_TYPES.has(layoutType)) {
+      throw new Error('試用店舗の店番号と合言葉でログインしてください（本番145とは別店舗です）');
     }
   }
 
   async function bootApp() {
-    assert145Store();
+    assertTrialStore();
     hideAuthHub();
     CloudDB.stopSync();
     CloudDB.setOnChange(() => {
@@ -177,8 +176,8 @@
     $('#btn-auth-login-go')?.addEventListener('click', async () => {
       try {
         showAuthError('');
-        await CloudAuth.login(STORE_NUMBER, els.authLoginPass.value);
-        assert145Store();
+        await CloudAuth.login(els.authLoginNumber.value, els.authLoginPass.value);
+        assertTrialStore();
         await bootApp();
       } catch (err) {
         showAuthError(err.message);
@@ -194,7 +193,7 @@
         showAuthError('');
         const text = await decodeQrFromFile(file);
         await CloudAuth.loginFromQr(text);
-        assert145Store();
+        assertTrialStore();
         await bootApp();
       } catch (err) {
         showAuthError(err.message);
@@ -220,12 +219,12 @@
     const script = document.querySelector('script[src*="app.js"]');
     const v = script && new URL(script.src, location.href).searchParams.get('v');
     const el = document.getElementById('app-version');
-    if (el && v) el.textContent = `v${v}`;
+    if (el && v) el.textContent = `試用 t${v}`;
   }
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=65').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=t2').catch(() => {});
     }
   }
 

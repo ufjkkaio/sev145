@@ -6,27 +6,28 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="棚清掃">
-  <meta name="theme-color" content="#1a5f2a">
-  <title>店内棚 清掃管理</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/app.css?v=65">
+  <meta name="apple-mobile-web-app-title" content="棚清掃 試用">
+  <meta name="theme-color" content="#ef6c00">
+  <title>【試用】店内棚 清掃管理</title>
+  <link rel="apple-touch-icon" href="../icons/icon-192.png">
+  <link rel="stylesheet" href="../css/app.css?v=64">
+  <link rel="stylesheet" href="css/trial.css?v=t2">
 </head>
 <body>
   <div id="auth-gate" class="auth-gate" hidden>
     <div class="auth-gate__card">
-      <h2 class="auth-gate__title">145号店 棚清掃</h2>
+      <h2 class="auth-gate__title auth-gate__title--trial">試用版 145号店</h2>
+      <p class="auth-gate__hint">本番（528089）とは別の試用店舗でログインします</p>
       <p id="auth-error" class="auth-gate__error" hidden></p>
 
       <div id="auth-panel-home" class="auth-panel">
-        <button type="button" id="btn-auth-login" class="btn btn--primary auth-gate__btn">店舗に入る</button>
+        <button type="button" id="btn-auth-login" class="btn btn--primary auth-gate__btn">試用店舗に入る</button>
         <button type="button" id="btn-auth-qr" class="btn btn--ghost auth-gate__btn">QRで入る</button>
       </div>
 
       <div id="auth-panel-login" class="auth-panel" hidden>
-        <label class="auth-gate__label">店番号</label>
-        <input type="text" id="auth-login-number" class="dialog__input" value="528089" readonly>
+        <label class="auth-gate__label">店番号（6桁）</label>
+        <input type="text" id="auth-login-number" class="dialog__input" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="例：528088">
         <label class="auth-gate__label">合言葉</label>
         <input type="text" id="auth-login-pass" class="dialog__input" autocomplete="off" placeholder="合言葉">
         <div class="dialog__actions">
@@ -47,6 +48,7 @@
   </div>
 
   <div id="app" hidden>
+    <div class="trial-banner">試用版 — 本番データには影響しません</div>
     <header class="header">
       <h1 class="header__title">店内棚 清掃管理 <span id="app-version" class="app-version"></span></h1>
       <div class="header__actions">
@@ -59,11 +61,8 @@
       <div id="store-layout" class="store-layout"></div>
     </main>
 
-    <div id="edit-hint" class="edit-hint" hidden>
-      棚をタップして名称を変更
-    </div>
+    <div id="edit-hint" class="edit-hint" hidden>棚をタップして名称を変更</div>
 
-    <!-- 棚フォルダビュー -->
     <div id="folder-overlay" class="folder-overlay" hidden>
       <div class="folder" role="dialog" aria-labelledby="folder-title">
         <div class="folder__header">
@@ -73,7 +72,6 @@
           </div>
           <button type="button" id="btn-rename-shelf" class="btn btn--ghost btn--sm">名称変更</button>
         </div>
-
         <div class="folder__status">
           <label class="check-complete">
             <input type="checkbox" id="shelf-checked">
@@ -81,7 +79,6 @@
             <span class="check-complete__label">清掃完了</span>
           </label>
         </div>
-
         <div class="folder__content">
           <div id="photo-grid" class="photo-grid"></div>
           <div class="photo-add-row">
@@ -132,7 +129,7 @@
         <img id="viewer-image" class="photo-viewer__image" alt="">
         <div class="photo-viewer__meta">
           <label class="photo-viewer__label" for="viewer-author-input">撮影者</label>
-          <input type="text" id="viewer-author-input" class="photo-viewer__author-input" name="shelf-photo-author" placeholder="シフト　名前" maxlength="10" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+          <input type="text" id="viewer-author-input" class="photo-viewer__author-input" placeholder="シフト　名前" maxlength="10" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
           <button type="button" id="btn-viewer-save-author" class="btn btn--primary photo-viewer__save-btn">名前を保存</button>
         </div>
         <div class="photo-viewer__actions">
@@ -149,7 +146,6 @@
       </div>
     </div>
 
-    <!-- 写真編集（ペンのみ） -->
     <div id="photo-editor" class="photo-editor" hidden>
       <div class="photo-editor__bar">
         <button type="button" id="btn-editor-back" class="btn btn--ghost btn--sm">戻る</button>
@@ -162,17 +158,18 @@
     </div>
   </div>
 
+  <script>window.TANA_KANRI_SESSION_KEY = 'tana-kanri-sessions-trial';</script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script src="js/firebase-config.js?v=65"></script>
-  <script src="js/firebase-boot.js?v=65"></script>
-  <script src="js/cloud-auth.js?v=65"></script>
-  <script src="js/cloud-db.js?v=65"></script>
-  <script src="js/layout-template.js?v=65"></script>
-  <script src="js/db.js?v=65"></script>
-  <script src="js/app.js?v=65"></script>
+  <script src="../js/firebase-config.js?v=64"></script>
+  <script src="../js/firebase-boot.js?v=64"></script>
+  <script src="../js/cloud-auth.js?v=64"></script>
+  <script src="../js/cloud-db.js?v=64"></script>
+  <script src="../js/layout-template.js?v=64"></script>
+  <script src="js/db.js?v=t2"></script>
+  <script src="js/app.js?v=t2"></script>
 </body>
 </html>

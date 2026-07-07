@@ -1,0 +1,1 @@
+window.DB = CloudDB;

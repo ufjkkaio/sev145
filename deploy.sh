@@ -23,6 +23,15 @@ if [ -f simple/sw.js ]; then
   perl -pi -e "s/\\?v=\\d+/?v=${NEXT}/g" simple/sw.js simple/index.html simple/js/app.js
 fi
 
+# trial/ は本番と別バージョン（t1, t2, ...）
+if [ -f trial/sw.js ]; then
+  TRIAL_CURRENT="$(grep -oE 'shelf-cleaning-trial-v[0-9]+' trial/sw.js | head -1 | grep -oE '[0-9]+$')"
+  TRIAL_NEXT=$((TRIAL_CURRENT + 1))
+  echo "試用版 t${TRIAL_CURRENT} → t${TRIAL_NEXT} に更新..."
+  perl -pi -e "s/shelf-cleaning-trial-v${TRIAL_CURRENT}/shelf-cleaning-trial-v${TRIAL_NEXT}/g" trial/sw.js
+  perl -pi -e "s/\\?v=t${TRIAL_CURRENT}/?v=t${TRIAL_NEXT}/g" trial/sw.js trial/index.html trial/js/app.js trial/css/trial.css 2>/dev/null || true
+fi
+
 git add -A
 
 if git diff --staged --quiet; then
@@ -37,4 +46,5 @@ echo ""
 echo "デプロイ完了"
 echo "  バージョン: v${NEXT}"
 echo "  145号店: https://ufjkkaio.github.io/sev145/"
+echo "  試用版:  https://ufjkkaio.github.io/sev145/trial/"
 echo "  他店舗:  https://ufjkkaio.github.io/sev145/simple/"

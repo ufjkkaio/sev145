@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>試用店舗 初期設定</title>
+  <style>
+    body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+    input, button { font-size: 16px; padding: 10px; width: 100%; margin: 8px 0; box-sizing: border-box; }
+    #result { margin-top: 20px; padding: 16px; background: #fff3e0; border-radius: 8px; word-break: break-all; }
+    canvas { display: block; margin: 16px auto; }
+    .warn { color: #c62828; font-size: 0.9rem; }
+    #status { color: #555; font-size: 0.9rem; min-height: 1.2em; }
+    .note { font-size: 0.85rem; color: #666; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>試用店舗 初期設定</h1>
+  <p class="note">本番145（528089）とは別の試用店舗を作成します。<code>/trial/</code> 専用です。</p>
+  <label>店番号（6桁・528089以外）</label>
+  <input id="number" value="528088" inputmode="numeric" maxlength="6">
+  <label>店舗名（表示用）</label>
+  <input id="name" value="145試用" maxlength="20">
+  <button id="go" type="button">試用店舗を作成</button>
+  <p id="status" aria-live="polite"></p>
+  <div id="result" hidden></div>
+  <canvas id="qr" hidden></canvas>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="../js/firebase-config.js?v=64"></script>
+  <script src="../js/firebase-boot.js?v=64"></script>
+  <script src="../js/cloud-auth.js?v=64"></script>
+  <script src="../js/qr-render.js?v=64"></script>
+  <script>
+    const PRODUCTION_NUMBER = '528089';
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const qrEl = document.getElementById('qr');
+
+    document.getElementById('go').onclick = async () => {
+      const storeNumber = document.getElementById('number').value.trim();
+      const name = document.getElementById('name').value.trim();
+      const btn = document.getElementById('go');
+      if (storeNumber === PRODUCTION_NUMBER) {
+        alert('528089 は本番145専用です。別の店番号を使ってください。');
+        return;
+      }
+      btn.disabled = true;
+      statusEl.textContent = '作成中…';
+      resultEl.hidden = true;
+      qrEl.hidden = true;
+
+      let entry;
+      let passphrase;
+      try {
+        ({ entry, passphrase } = await CloudAuth.register(storeNumber, name, {
+          layoutType: 'fixed-145-trial',
+          blockReserved: false,
+        }));
+      } catch (e) {
+        statusEl.textContent = '';
+        alert((e && e.message ? e.message : '作成に失敗しました'));
+        btn.disabled = false;
+        return;
+      }
+
+      statusEl.textContent = '作成完了';
+      resultEl.hidden = false;
+      resultEl.innerHTML =
+        `<p><strong>店番号</strong> ${entry.storeNumber}</p>` +
+        `<p><strong>合言葉</strong> ${passphrase}</p>` +
+        `<p>必ずスクショで保存してください。</p>` +
+        `<p class="note">ログイン先: <a href="../trial/">/trial/</a></p>`;
+
+      try {
+        const payload = CloudAuth.buildQrPayload(entry.storeNumber, passphrase);
+        await QrRender.toCanvas(qrEl, payload, 220);
+        qrEl.hidden = false;
+      } catch {
+        resultEl.innerHTML += '<p class="warn">QRは表示できませんでした。</p>';
+      }
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+.trial-banner {
+  padding: 8px 12px;
+  background: #fff3e0;
+  border-bottom: 2px solid #ef6c00;
+  color: #e65100;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.auth-gate__title--trial {
+  color: #e65100;
+}
+
+.header__title .app-version {
+  color: #e65100;
+}
