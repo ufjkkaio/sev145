@@ -245,7 +245,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=67').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=68').catch(() => {});
     }
   }
 
@@ -262,11 +262,23 @@
   async function refresh() {
     const shelves = await DB.getAllShelves();
     state.shelfMap = {};
+    const repairs = [];
     for (const shelf of shelves) {
       const prev = state.shelfMap[shelf.slotKey];
-      if (!prev || Number(shelf.id) < Number(prev.id)) {
+      if (!prev) {
         state.shelfMap[shelf.slotKey] = shelf;
+        continue;
       }
+      const checked = prev.checked || shelf.checked;
+      const canonical = Number(shelf.id) < Number(prev.id) ? shelf : prev;
+      if (checked && !canonical.checked) {
+        repairs.push(canonical);
+      }
+      state.shelfMap[shelf.slotKey] = { ...canonical, checked };
+    }
+    for (const shelf of repairs) {
+      shelf.checked = true;
+      await DB.updateShelf(shelf);
     }
     state.photoCounts = await DB.getPhotoCounts();
     updateShelfCells();
@@ -911,9 +923,13 @@
     for (const shelf of shelves) {
       if (!validKeys.has(shelf.slotKey)) continue;
       const prev = bySlot.get(shelf.slotKey);
-      if (!prev || Number(shelf.id) < Number(prev.id)) {
+      if (!prev) {
         bySlot.set(shelf.slotKey, shelf);
+        continue;
       }
+      const checked = prev.checked || shelf.checked;
+      const canonical = Number(shelf.id) < Number(prev.id) ? shelf : prev;
+      bySlot.set(shelf.slotKey, { ...canonical, checked });
     }
     return sortShelvesForPicker([...bySlot.values()]);
   }

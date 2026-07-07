@@ -143,6 +143,7 @@
     });
     CloudDB.startSync();
     await ensureShelves();
+    await warnIfDuplicateShelves();
     await refresh();
     renderStoreLayout();
   }
@@ -244,7 +245,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=t5').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=t6').catch(() => {});
     }
   }
 
@@ -261,11 +262,42 @@
   async function refresh() {
     const shelves = await DB.getAllShelves();
     state.shelfMap = {};
+    const repairs = [];
     for (const shelf of shelves) {
-      state.shelfMap[shelf.slotKey] = shelf;
+      const prev = state.shelfMap[shelf.slotKey];
+      if (!prev) {
+        state.shelfMap[shelf.slotKey] = shelf;
+        continue;
+      }
+      const checked = prev.checked || shelf.checked;
+      const canonical = Number(shelf.id) < Number(prev.id) ? shelf : prev;
+      if (checked && !canonical.checked) {
+        repairs.push(canonical);
+      }
+      state.shelfMap[shelf.slotKey] = { ...canonical, checked };
+    }
+    for (const shelf of repairs) {
+      shelf.checked = true;
+      await DB.updateShelf(shelf);
     }
     state.photoCounts = await DB.getPhotoCounts();
     updateShelfCells();
+  }
+
+  async function warnIfDuplicateShelves() {
+    const shelves = await DB.getAllShelves();
+    const groups = new Map();
+    for (const shelf of shelves) {
+      if (!groups.has(shelf.slotKey)) groups.set(shelf.slotKey, []);
+      groups.get(shelf.slotKey).push(shelf);
+    }
+    const dupes = [...groups.entries()].filter(([, g]) => g.length > 1);
+    if (dupes.length > 0) {
+      console.warn(
+        '[trial] 重複棚を検出しました（同期で統合されます）:',
+        dupes.map(([k, g]) => `${k}×${g.length}`).join(', '),
+      );
+    }
   }
 
   function bindEvents() {
@@ -900,6 +932,24 @@
     );
   }
 
+  async function getLayoutShelvesForPicker() {
+    const validKeys = new Set(getAllSlots().map((s) => s.slotKey));
+    const bySlot = new Map();
+    const shelves = await DB.getAllShelves();
+    for (const shelf of shelves) {
+      if (!validKeys.has(shelf.slotKey)) continue;
+      const prev = bySlot.get(shelf.slotKey);
+      if (!prev) {
+        bySlot.set(shelf.slotKey, shelf);
+        continue;
+      }
+      const checked = prev.checked || shelf.checked;
+      const canonical = Number(shelf.id) < Number(prev.id) ? shelf : prev;
+      bySlot.set(shelf.slotKey, { ...canonical, checked });
+    }
+    return sortShelvesForPicker([...bySlot.values()]);
+  }
+
   function closeMoveShelfDialog() {
     if (els.moveShelfDialog) els.moveShelfDialog.hidden = true;
     state.moveShelfMode = null;
@@ -912,7 +962,7 @@
     if (mode === 'selected' && state.selectedPhotoIds.size === 0) return;
     if (!state.currentShelfId) return;
 
-    const shelves = sortShelvesForPicker(await DB.getAllShelves());
+    const shelves = await getLayoutShelvesForPicker();
     const excludeId = state.currentShelfId;
     const targets = shelves.filter((s) => Number(s.id) !== Number(excludeId));
     if (targets.length === 0) {

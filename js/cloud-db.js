@@ -165,6 +165,11 @@ const CloudDB = (function () {
       if (group.length <= 1) continue;
       group.sort((a, b) => Number(a.id) - Number(b.id));
       const primary = group[0];
+      const anyChecked = group.some((s) => s.checked);
+      if (anyChecked && !primary.checked) {
+        primary.checked = true;
+        await updateShelf(primary);
+      }
       for (let i = 1; i < group.length; i += 1) {
         await mergeShelvesInto(primary.id, group[i].id);
       }
@@ -172,11 +177,21 @@ const CloudDB = (function () {
   }
 
   async function mergeShelvesInto(primaryId, secondaryId) {
+    const primary = await getShelf(primaryId);
+    const secondary = await getShelf(secondaryId);
+    if (!primary || !secondary) return;
+
     const photos = await getPhotosByShelf(secondaryId);
     for (const photo of photos) {
       photo.shelfId = primaryId;
       await updatePhoto(photo);
     }
+
+    if (secondary.checked && !primary.checked) {
+      primary.checked = true;
+      await updateShelf(primary);
+    }
+
     await shelvesCol().doc(String(secondaryId)).delete();
   }
 
