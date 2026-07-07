@@ -25,4 +25,20 @@ window.DB = Object.assign({}, CloudDB, {
     }
     return photos.length;
   },
+
+  async movePhotos(photoIds, targetShelfId) {
+    let count = 0;
+    for (const photoId of photoIds) {
+      await this.movePhoto(photoId, targetShelfId);
+      count += 1;
+    }
+    return count;
+  },
+
+  async deletePhotos(photoIds) {
+    for (const photoId of photoIds) {
+      await CloudDB.deletePhoto(photoId);
+    }
+    return photoIds.length;
+  },
 });

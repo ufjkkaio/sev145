@@ -23,10 +23,17 @@
     storeLayout: $('#store-layout'),
     editHint: $('#edit-hint'),
     folderOverlay: $('#folder-overlay'),
+    folder: $('.folder'),
     btnFolderBack: $('#btn-folder-back'),
     folderTitle: $('#folder-title'),
     btnRenameShelf: $('#btn-rename-shelf'),
-    btnMoveAllPhotos: $('#btn-move-all-photos'),
+    btnSelectPhotos: $('#btn-select-photos'),
+    photoSelectBar: $('#photo-select-bar'),
+    photoSelectCount: $('#photo-select-count'),
+    btnSelectAll: $('#btn-select-all'),
+    btnSelectMove: $('#btn-select-move'),
+    btnSelectDelete: $('#btn-select-delete'),
+    btnSelectCancel: $('#btn-select-cancel'),
     shelfChecked: $('#shelf-checked'),
     photoGrid: $('#photo-grid'),
     photoInputCamera: $('#photo-input-camera'),
@@ -73,6 +80,9 @@
     nameDialogCallback: null,
     moveShelfMode: null,
     pendingMovePhotoId: null,
+    photoSelectMode: false,
+    selectedPhotoIds: new Set(),
+    folderPhotoCount: 0,
 
     editor: {
       open: false,
@@ -234,7 +244,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=t4').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=t5').catch(() => {});
     }
   }
 
@@ -270,7 +280,11 @@
     els.photoInputCamera.addEventListener('change', handlePhotoUpload);
     els.photoInputAlbum.addEventListener('change', handlePhotoUpload);
     els.btnRenameShelf.addEventListener('click', handleRenameShelf);
-    els.btnMoveAllPhotos.addEventListener('click', () => openMoveShelfDialog('all'));
+    els.btnSelectPhotos.addEventListener('click', enterPhotoSelectMode);
+    els.btnSelectAll.addEventListener('click', toggleSelectAllPhotos);
+    els.btnSelectMove.addEventListener('click', () => openMoveShelfDialog('selected'));
+    els.btnSelectDelete.addEventListener('click', handleDeleteSelectedPhotos);
+    els.btnSelectCancel.addEventListener('click', exitPhotoSelectMode);
 
     els.btnNameCancel.addEventListener('click', closeNameDialog);
     els.btnNameOk.addEventListener('click', confirmNameDialog);
@@ -559,16 +573,98 @@
     els.folderOverlay.hidden = false;
     document.body.style.overflow = 'hidden';
     await renderPhotos(shelfId);
-    updateMoveAllButton(shelfId);
+    updateSelectPhotosButton(shelfId);
   }
 
-  async function updateMoveAllButton(shelfId) {
-    if (!els.btnMoveAllPhotos) return;
+  async function updateSelectPhotosButton(shelfId) {
+    if (!els.btnSelectPhotos) return;
     const photos = await DB.getPhotosByShelf(shelfId);
-    els.btnMoveAllPhotos.hidden = photos.length === 0;
+    els.btnSelectPhotos.hidden = photos.length === 0 || state.photoSelectMode;
+  }
+
+  function enterPhotoSelectMode() {
+    if (!state.currentShelfId) return;
+    state.photoSelectMode = true;
+    state.selectedPhotoIds = new Set();
+    if (els.folder) els.folder.classList.add('folder--select-mode');
+    if (els.photoSelectBar) els.photoSelectBar.hidden = false;
+    if (els.btnSelectPhotos) els.btnSelectPhotos.hidden = true;
+    updatePhotoSelectBar();
+    renderPhotos(state.currentShelfId);
+  }
+
+  function exitPhotoSelectMode() {
+    state.photoSelectMode = false;
+    state.selectedPhotoIds = new Set();
+    if (els.folder) els.folder.classList.remove('folder--select-mode');
+    if (els.photoSelectBar) els.photoSelectBar.hidden = true;
+    updatePhotoSelectBar();
+    if (state.currentShelfId) {
+      updateSelectPhotosButton(state.currentShelfId);
+      renderPhotos(state.currentShelfId);
+    }
+  }
+
+  function togglePhotoSelection(photoId) {
+    if (state.selectedPhotoIds.has(photoId)) {
+      state.selectedPhotoIds.delete(photoId);
+    } else {
+      state.selectedPhotoIds.add(photoId);
+    }
+    updatePhotoSelectBar();
+    renderPhotos(state.currentShelfId);
+  }
+
+  async function toggleSelectAllPhotos() {
+    if (!state.currentShelfId) return;
+    const photos = await DB.getPhotosByShelf(state.currentShelfId);
+    const allSelected = photos.length > 0 && photos.every((p) => state.selectedPhotoIds.has(p.id));
+    state.selectedPhotoIds = allSelected
+      ? new Set()
+      : new Set(photos.map((p) => p.id));
+    updatePhotoSelectBar();
+    renderPhotos(state.currentShelfId);
+  }
+
+  function updatePhotoSelectBar() {
+    const count = state.selectedPhotoIds.size;
+    if (els.photoSelectCount) {
+      els.photoSelectCount.textContent = count > 0
+        ? `${count}枚選択中`
+        : '写真をタップして選択';
+    }
+    if (els.btnSelectMove) els.btnSelectMove.disabled = count === 0;
+    if (els.btnSelectDelete) els.btnSelectDelete.disabled = count === 0;
+    if (els.btnSelectAll) {
+      const allSelected = state.folderPhotoCount > 0
+        && state.selectedPhotoIds.size === state.folderPhotoCount;
+      els.btnSelectAll.textContent = allSelected ? '選択解除' : 'すべて選択';
+    }
+  }
+
+  async function handleDeleteSelectedPhotos() {
+    const ids = [...state.selectedPhotoIds];
+    if (ids.length === 0) {
+      alert('削除する写真を選んでください');
+      return;
+    }
+    if (!confirm(`選択した${ids.length}枚の写真を削除しますか？`)) return;
+
+    try {
+      await DB.deletePhotos(ids);
+      exitPhotoSelectMode();
+      state.photoCounts = await DB.getPhotoCounts();
+      updateShelfCells();
+      await renderPhotos(state.currentShelfId);
+      updateSelectPhotosButton(state.currentShelfId);
+      alert(`${ids.length}枚を削除しました`);
+    } catch (err) {
+      alert(err.message || '削除に失敗しました');
+    }
   }
 
   function closeFolder() {
+    exitPhotoSelectMode();
     els.folderOverlay.hidden = true;
     document.body.style.overflow = '';
     state.currentShelfId = null;
@@ -609,6 +705,7 @@
 
   async function renderPhotos(shelfId) {
     const photos = await DB.getPhotosByShelf(shelfId);
+    state.folderPhotoCount = photos.length;
     const currentIds = new Set(photos.map((p) => p.id));
 
     for (const id of Object.keys(state.photoUrlById)) {
@@ -624,6 +721,7 @@
       empty.className = 'folder-empty';
       empty.textContent = 'まだ写真がありません';
       els.photoGrid.appendChild(empty);
+      updatePhotoSelectBar();
       return;
     }
 
@@ -631,9 +729,10 @@
 
     for (const photo of photos) {
       const url = getPhotoDisplayUrl(photo);
+      const isSelected = state.selectedPhotoIds.has(photo.id);
 
       const item = document.createElement('div');
-      item.className = 'photo-item';
+      item.className = 'photo-item' + (isSelected ? ' photo-item--selected' : '');
 
       const date = new Date(photo.createdAt);
       const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -643,7 +742,12 @@
         ? `<span class="photo-item__author">${escapeHtml(author)}</span>`
         : '<span class="photo-item__author photo-item__author--empty">名前未入力</span>';
 
+      const checkHtml = state.photoSelectMode
+        ? `<div class="photo-item__check" aria-hidden="true">${isSelected ? '✓' : ''}</div>`
+        : '';
+
       item.innerHTML = `
+        ${checkHtml}
         <img src="${url}" alt="清掃写真">
         <div class="photo-item__footer">
           ${authorHtml}
@@ -653,9 +757,17 @@
       item.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        openPhotoViewer(photo.id);
+        if (state.photoSelectMode) {
+          togglePhotoSelection(photo.id);
+        } else {
+          openPhotoViewer(photo.id);
+        }
       });
       els.photoGrid.appendChild(item);
+    }
+
+    if (state.photoSelectMode) {
+      updatePhotoSelectBar();
     }
   }
 
@@ -708,6 +820,7 @@
     state.photoCounts = await DB.getPhotoCounts();
     updateShelfCells();
     await renderPhotos(state.currentShelfId);
+    updateSelectPhotosButton(state.currentShelfId);
     await openPhotoViewer(photoId);
   }
 
@@ -777,7 +890,7 @@
       state.photoCounts = await DB.getPhotoCounts();
       updateShelfCells();
       await renderPhotos(state.currentShelfId);
-      updateMoveAllButton(state.currentShelfId);
+      updateSelectPhotosButton(state.currentShelfId);
     }
   }
 
@@ -796,7 +909,8 @@
 
   async function openMoveShelfDialog(mode) {
     if (mode === 'photo' && !state.viewingPhotoId) return;
-    if (mode === 'all' && !state.currentShelfId) return;
+    if (mode === 'selected' && state.selectedPhotoIds.size === 0) return;
+    if (!state.currentShelfId) return;
 
     const shelves = sortShelvesForPicker(await DB.getAllShelves());
     const excludeId = state.currentShelfId;
@@ -811,16 +925,21 @@
       state.pendingMovePhotoId = state.viewingPhotoId;
     }
     if (els.moveShelfDialogTitle) {
-      els.moveShelfDialogTitle.textContent =
-        mode === 'all' ? 'すべて移動する棚を選ぶ' : 'この写真を移動する棚を選ぶ';
+      const titles = {
+        selected: '選択した写真の移動先',
+        photo: 'この写真を移動する棚を選ぶ',
+      };
+      els.moveShelfDialogTitle.textContent = titles[mode] || '移動先の棚を選ぶ';
     }
     if (els.moveShelfDialogHint) {
-      const fromShelf = shelves.find((s) => s.id === excludeId);
+      const fromShelf = shelves.find((s) => Number(s.id) === Number(excludeId));
       const fromName = fromShelf?.name || 'この棚';
-      els.moveShelfDialogHint.textContent =
-        mode === 'all'
-          ? `「${fromName}」の写真をすべて移動します`
-          : `「${fromName}」から移動します`;
+      if (mode === 'selected') {
+        els.moveShelfDialogHint.textContent =
+          `「${fromName}」の選択した${state.selectedPhotoIds.size}枚を移動します`;
+      } else {
+        els.moveShelfDialogHint.textContent = `「${fromName}」から移動します`;
+      }
     }
 
     els.moveShelfList.innerHTML = '';
@@ -844,25 +963,29 @@
     const fromShelf = await DB.getShelf(fromShelfId);
     const fromName = fromShelf?.name || 'この棚';
     const toName = targetShelf.name;
+    const selectedCount = state.selectedPhotoIds.size;
     const msg =
-      mode === 'all'
-        ? `「${fromName}」の写真をすべて「${toName}」へ移動しますか？`
+      mode === 'selected'
+        ? `選択した${selectedCount}枚を「${toName}」へ移動しますか？`
         : `この写真を「${toName}」へ移動しますか？`;
     if (!confirm(msg)) return;
 
     closeMoveShelfDialog();
 
     try {
-      if (mode === 'all') {
-        const count = await DB.moveAllPhotos(fromShelfId, targetShelf.id);
-        if (count === 0) {
-          alert('移動する写真がありません');
+      if (mode === 'selected') {
+        const ids = [...state.selectedPhotoIds];
+        if (ids.length === 0) {
+          alert('移動する写真を選んでください');
           return;
         }
-        await refresh();
+        await DB.movePhotos(ids, targetShelf.id);
+        exitPhotoSelectMode();
+        state.photoCounts = await DB.getPhotoCounts();
+        updateShelfCells();
         await renderPhotos(fromShelfId);
-        updateMoveAllButton(fromShelfId);
-        alert(`「${toName}」へ ${count} 枚移動しました`);
+        updateSelectPhotosButton(fromShelfId);
+        alert(`「${toName}」へ ${ids.length} 枚移動しました`);
       } else {
         const photoId = state.pendingMovePhotoId || state.viewingPhotoId;
         if (!photoId) {
@@ -885,7 +1008,7 @@
         state.photoCounts = await DB.getPhotoCounts();
         updateShelfCells();
         await renderPhotos(fromShelfId);
-        updateMoveAllButton(fromShelfId);
+        updateSelectPhotosButton(fromShelfId);
         alert(`「${toName}」へ移動しました`);
       }
     } catch (err) {
