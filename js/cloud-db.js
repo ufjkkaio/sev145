@@ -153,6 +153,24 @@ const CloudDB = (function () {
     await shelvesCol().doc(String(id)).delete();
   }
 
+  async function dedupeShelvesBySlotKey(validSlotKeys) {
+    const existing = await getAllShelves();
+    const groups = new Map();
+    for (const shelf of existing) {
+      if (validSlotKeys && !validSlotKeys.has(shelf.slotKey)) continue;
+      if (!groups.has(shelf.slotKey)) groups.set(shelf.slotKey, []);
+      groups.get(shelf.slotKey).push(shelf);
+    }
+    for (const group of groups.values()) {
+      if (group.length <= 1) continue;
+      group.sort((a, b) => Number(a.id) - Number(b.id));
+      const primary = group[0];
+      for (let i = 1; i < group.length; i += 1) {
+        await mergeShelvesInto(primary.id, group[i].id);
+      }
+    }
+  }
+
   async function mergeShelvesInto(primaryId, secondaryId) {
     const photos = await getPhotosByShelf(secondaryId);
     for (const photo of photos) {
@@ -345,6 +363,8 @@ const CloudDB = (function () {
         await deleteShelf(shelf.id);
       }
     }
+
+    await dedupeShelvesBySlotKey(slotKeys);
 
     existing = await getAllShelves();
     const bySlot = new Map(existing.map((s) => [s.slotKey, s]));

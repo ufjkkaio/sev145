@@ -245,7 +245,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=66').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=67').catch(() => {});
     }
   }
 
@@ -263,7 +263,10 @@
     const shelves = await DB.getAllShelves();
     state.shelfMap = {};
     for (const shelf of shelves) {
-      state.shelfMap[shelf.slotKey] = shelf;
+      const prev = state.shelfMap[shelf.slotKey];
+      if (!prev || Number(shelf.id) < Number(prev.id)) {
+        state.shelfMap[shelf.slotKey] = shelf;
+      }
     }
     state.photoCounts = await DB.getPhotoCounts();
     updateShelfCells();
@@ -901,6 +904,20 @@
     );
   }
 
+  async function getLayoutShelvesForPicker() {
+    const validKeys = new Set(getAllSlots().map((s) => s.slotKey));
+    const bySlot = new Map();
+    const shelves = await DB.getAllShelves();
+    for (const shelf of shelves) {
+      if (!validKeys.has(shelf.slotKey)) continue;
+      const prev = bySlot.get(shelf.slotKey);
+      if (!prev || Number(shelf.id) < Number(prev.id)) {
+        bySlot.set(shelf.slotKey, shelf);
+      }
+    }
+    return sortShelvesForPicker([...bySlot.values()]);
+  }
+
   function closeMoveShelfDialog() {
     if (els.moveShelfDialog) els.moveShelfDialog.hidden = true;
     state.moveShelfMode = null;
@@ -913,7 +930,7 @@
     if (mode === 'selected' && state.selectedPhotoIds.size === 0) return;
     if (!state.currentShelfId) return;
 
-    const shelves = sortShelvesForPicker(await DB.getAllShelves());
+    const shelves = await getLayoutShelvesForPicker();
     const excludeId = state.currentShelfId;
     const targets = shelves.filter((s) => Number(s.id) !== Number(excludeId));
     if (targets.length === 0) {
