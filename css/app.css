@@ -1136,3 +1136,121 @@ body.photo-viewer-open {
   font-weight: 400;
   opacity: 0.75;
 }
+
+/* ===== Photo move & multi-select ===== */
+.move-shelf-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: 12px 0 4px;
+}
+
+.move-shelf-item {
+  padding: 10px 6px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  background: #fffef5;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+  color: var(--color-text);
+}
+
+.move-shelf-item:active {
+  transform: scale(0.97);
+  background: #f0f8f0;
+}
+
+.dialog--move-shelf {
+  max-width: 360px;
+}
+
+#move-shelf-dialog.dialog-overlay {
+  z-index: 1100;
+}
+
+.folder__header .btn--sm + .btn--sm {
+  margin-left: 4px;
+}
+
+.folder--select-mode .photo-add-row {
+  display: none;
+}
+
+.folder--select-mode .folder__status {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.photo-select-bar {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -16px -16px;
+  padding: 12px 16px 16px;
+  background: #fffef5;
+  border-top: 2px solid var(--color-border);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.photo-select-bar__count {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.photo-select-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.photo-select-bar__actions .btn {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 0;
+}
+
+.photo-item--selected {
+  outline: 3px solid var(--color-primary);
+  outline-offset: -3px;
+}
+
+.photo-item__check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-primary);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.photo-item--selected .photo-item__check {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.photo-viewer__move-btn {
+  width: 100%;
+  min-height: 48px;
+  font-size: 16px;
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
