@@ -36,9 +36,6 @@ window.DB = Object.assign({}, CloudDB, {
   },
 
   async deletePhotos(photoIds) {
-    for (const photoId of photoIds) {
-      await CloudDB.deletePhoto(photoId);
-    }
-    return photoIds.length;
+    return CloudDB.deletePhotos(photoIds);
   },
 });

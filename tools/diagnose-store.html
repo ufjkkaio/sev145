@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>店舗データ診断</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 24px auto; padding: 0 16px; line-height: 1.5; }
+    input, button { font-size: 16px; padding: 10px; width: 100%; margin: 8px 0; box-sizing: border-box; }
+    pre, .box { background: #f5f5f5; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+    .warn { color: #c62828; }
+    .ok { color: #2e7d32; }
+    h2 { font-size: 1rem; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h1>店舗データ診断</h1>
+  <p>操作ログはアプリにはありません。このツールで Firestore / Storage の<strong>現在の状態</strong>を確認できます。</p>
+
+  <label>店番号（6桁）</label>
+  <input id="store-number" value="528089" inputmode="numeric" maxlength="6">
+  <label>合言葉</label>
+  <input id="store-pass" type="password" autocomplete="off">
+  <button id="btn-login" type="button">ログインして診断</button>
+  <p id="status"></p>
+  <div id="report" hidden></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+  <script src="../js/firebase-boot.js"></script>
+  <script src="../js/cloud-auth.js"></script>
+  <script>
+    const statusEl = document.getElementById('status');
+    const reportEl = document.getElementById('report');
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    }
+
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      statusEl.textContent = 'ログイン中…';
+      reportEl.hidden = true;
+      try {
+        await CloudAuth.login(
+          document.getElementById('store-number').value.trim(),
+          document.getElementById('store-pass').value,
+        );
+        await runDiagnosis();
+      } catch (err) {
+        statusEl.innerHTML = `<span class="warn">エラー: ${esc(err.message || err)}</span>`;
+      }
+    });
+
+    async function runDiagnosis() {
+      statusEl.textContent = 'データを読み込み中…';
+      const storeId = CloudAuth.getCurrentStoreId();
+      const db = FirebaseBoot.db;
+      const storeRef = db.collection('stores').doc(storeId);
+
+      const [shelvesSnap, photosSnap, storeSnap] = await Promise.all([
+        storeRef.collection('shelves').get(),
+        storeRef.collection('photos').get(),
+        storeRef.get(),
+      ]);
+
+      const shelves = shelvesSnap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
+      const photos = photosSnap.docs.map((d) => ({ _docId: d.id, ...d.data() }));
+      const shelfIds = new Set(shelves.map((s) => Number(s.id)));
+
+      const bySlot = new Map();
+      for (const s of shelves) {
+        if (!bySlot.has(s.slotKey)) bySlot.set(s.slotKey, []);
+        bySlot.get(s.slotKey).push(s);
+      }
+      const dupes = [...bySlot.entries()].filter(([, g]) => g.length > 1);
+
+      const orphanPhotos = photos.filter((p) => !shelfIds.has(Number(p.shelfId)));
+      const shelfNameById = Object.fromEntries(shelves.map((s) => [Number(s.id), s.name]));
+
+      const countsByShelf = {};
+      for (const p of photos) {
+        const sid = Number(p.shelfId);
+        countsByShelf[sid] = (countsByShelf[sid] || 0) + 1;
+      }
+
+      const withPhotos = shelves.filter((s) => (countsByShelf[Number(s.id)] || 0) > 0);
+
+      let storageOk = 0;
+      let storageFail = 0;
+      for (const p of photos.slice(0, 20)) {
+        if (!p.storagePath) { storageFail += 1; continue; }
+        try {
+          await FirebaseBoot.storage.ref(p.storagePath).getDownloadURL();
+          storageOk += 1;
+        } catch {
+          storageFail += 1;
+        }
+      }
+
+      const lines = [];
+      lines.push(`<h2>概要</h2><pre>`);
+      lines.push(`店舗ID: ${esc(storeId)}`);
+      lines.push(`棚の数: ${shelves.length}`);
+      lines.push(`写真メタデータ（Firestore）: ${photos.length} 件`);
+      lines.push(`写真がある棚: ${withPhotos.length} 棚`);
+      lines.push(`孤立写真（棚ID不明）: ${orphanPhotos.length} 件`);
+      lines.push(`重複 slotKey: ${dupes.length} 組`);
+      lines.push(`Storage 確認（先頭${Math.min(photos.length, 20)}件）: OK ${storageOk} / NG ${storageFail}`);
+      lines.push(`</pre>`);
+
+      if (dupes.length > 0) {
+        lines.push(`<h2 class="warn">重複棚（同じ slotKey が複数）</h2><pre>`);
+        for (const [slotKey, group] of dupes) {
+          lines.push(`${esc(slotKey)}: ID ${group.map((s) => s.id).join(', ')}`);
+        }
+        lines.push('</pre>');
+      }
+
+      if (orphanPhotos.length > 0) {
+        lines.push(`<h2 class="warn">孤立写真（表示されない可能性）</h2><pre>`);
+        for (const p of orphanPhotos.slice(0, 30)) {
+          lines.push(`${esc(p.id)} → shelfId=${p.shelfId} (${p.createdAt ? new Date(p.createdAt).toLocaleString('ja-JP') : '日時不明'})`);
+        }
+        if (orphanPhotos.length > 30) lines.push(`…他 ${orphanPhotos.length - 30} 件`);
+        lines.push('</pre>');
+        lines.push('<p class="ok">孤立写真は Firestore に残っていれば復旧できる可能性があります。</p>');
+      }
+
+      if (photos.length === 0) {
+        lines.push('<p class="warn"><strong>Firestore に写真データがありません。</strong>リセット操作、または棚整理時の削除が行われた可能性があります。Storage にファイルが残っていても、アプリからは復元できません（手動復旧が必要）。</p>');
+      }
+
+      lines.push(`<h2>Firebase コンソールで確認する場所</h2><pre>`);
+      lines.push(`Firestore: stores / ${storeId} / photos`);
+      lines.push(`Firestore: stores / ${storeId} / shelves`);
+      lines.push(`Storage: stores / ${storeId} / photos /`);
+      lines.push(`プロジェクト: tana-kanri-a275d`);
+      lines.push('</pre>');
+      lines.push('<p>※ アプリ内に操作ログはありません。誰がいつ削除したかは Firebase 標準では記録されません（GCP の監査ログは Blaze プラン等が必要）。</p>');
+
+      reportEl.innerHTML = lines.join('\n');
+      reportEl.hidden = false;
+      statusEl.innerHTML = '<span class="ok">診断完了</span>';
+    }
+  </script>
+</body>
+</html>

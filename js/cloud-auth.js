@@ -73,6 +73,15 @@ const CloudAuth = (function () {
     return currentStoreMeta;
   }
 
+  function verifyCurrentPassphrase(passphrase) {
+    if (!passphrase) throw new Error('合言葉を入力してください');
+    const entry = loadSessions().stores.find((s) => s.storeId === currentStoreId);
+    if (!entry) throw new Error('店舗に接続されていません');
+    if (entry.passphrase !== passphrase) {
+      throw new Error('合言葉が正しくありません');
+    }
+  }
+
   async function loginDocId(storeNumber, passphrase) {
     const data = new TextEncoder().encode(`${storeNumber}:${passphrase}`);
     const buf = await crypto.subtle.digest('SHA-256', data);
@@ -270,6 +279,7 @@ const CloudAuth = (function () {
     getSavedStores,
     getCurrentStoreId,
     getCurrentStoreMeta,
+    verifyCurrentPassphrase,
     login,
     register,
     restoreSession,

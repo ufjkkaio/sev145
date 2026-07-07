@@ -21,6 +21,26 @@ const CloudDB = (function () {
     return storeRef().collection('photos');
   }
 
+  function auditLogCol() {
+    return storeRef().collection('auditLog');
+  }
+
+  async function writeAuditLog(action, details = {}) {
+    try {
+      const meta = CloudAuth.getCurrentStoreMeta();
+      await auditLogCol().add({
+        action,
+        details,
+        at: Date.now(),
+        storeNumber: meta?.storeNumber || '',
+        app: typeof location !== 'undefined' ? location.pathname : '',
+        uid: FirebaseBoot.auth.currentUser?.uid || '',
+      });
+    } catch (err) {
+      console.warn('auditLog:', err);
+    }
+  }
+
   function setOnChange(fn) {
     onChangeCallback = fn;
   }
@@ -145,12 +165,21 @@ const CloudDB = (function () {
     }, { merge: true });
   }
 
-  async function deleteShelf(id) {
+  async function deleteShelf(id, options = {}) {
+    const shelf = await getShelf(id);
     const photos = await getPhotosByShelf(id);
     for (const photo of photos) {
-      await deletePhoto(photo.id);
+      await deletePhoto(photo.id, { skipAudit: true });
     }
     await shelvesCol().doc(String(id)).delete();
+    if (!options.skipAudit) {
+      await writeAuditLog('delete_shelf', {
+        shelfId: id,
+        slotKey: shelf?.slotKey || '',
+        photoCount: photos.length,
+        source: options.source || 'manual',
+      });
+    }
   }
 
   async function dedupeShelvesBySlotKey(validSlotKeys) {
@@ -298,7 +327,7 @@ const CloudDB = (function () {
     if (photo.blob) blobCache.set(photo.id, photo.blob);
   }
 
-  async function deletePhoto(id) {
+  async function deletePhoto(id, options = {}) {
     const snap = await photosCol().doc(id).get();
     if (snap.exists) {
       const path = snap.data().storagePath;
@@ -313,6 +342,20 @@ const CloudDB = (function () {
     }
     blobCache.delete(id);
     urlCache.delete(id);
+    if (!options.skipAudit) {
+      await writeAuditLog('delete_photo', { photoId: id });
+    }
+  }
+
+  async function deletePhotos(photoIds) {
+    const ids = [...photoIds];
+    for (const id of ids) {
+      await deletePhoto(id, { skipAudit: true });
+    }
+    if (ids.length > 0) {
+      await writeAuditLog('delete_photos_bulk', { count: ids.length });
+    }
+    return ids.length;
   }
 
   async function getPhoto(id) {
@@ -332,11 +375,23 @@ const CloudDB = (function () {
   async function syncShelvesFromBoard(board) {
     const existing = await getAllShelves();
     const slotKeys = new Set(board.blocks.map((b) => b.slotKey));
+    const removed = [];
 
     for (const shelf of existing) {
       if (!slotKeys.has(shelf.slotKey)) {
-        await deleteShelf(shelf.id);
+        const photoCount = (await getPhotosByShelf(shelf.id)).length;
+        removed.push({ shelfId: shelf.id, slotKey: shelf.slotKey, photoCount });
+        await deleteShelf(shelf.id, { skipAudit: true });
       }
+    }
+    if (removed.length > 0) {
+      const photoCount = removed.reduce((n, r) => n + r.photoCount, 0);
+      await writeAuditLog('sync_prune_shelves', {
+        source: 'board',
+        shelfCount: removed.length,
+        photoCount,
+        shelves: removed,
+      });
     }
 
     for (const block of board.blocks) {
@@ -364,8 +419,13 @@ const CloudDB = (function () {
 
     if (options.reset) {
       const existing = await getAllShelves();
+      const photoSnap = await photosCol().get();
+      await writeAuditLog('sync_template_reset', {
+        shelfCount: existing.length,
+        photoCount: photoSnap.size,
+      });
       for (const shelf of existing) {
-        await deleteShelf(shelf.id);
+        await deleteShelf(shelf.id, { skipAudit: true });
       }
       if (options.layoutVersion != null) {
         await setLayoutVersion(options.layoutVersion);
@@ -373,10 +433,22 @@ const CloudDB = (function () {
     }
 
     let existing = await getAllShelves();
+    const removed = [];
     for (const shelf of existing) {
       if (!slotKeys.has(shelf.slotKey)) {
-        await deleteShelf(shelf.id);
+        const photoCount = (await getPhotosByShelf(shelf.id)).length;
+        removed.push({ shelfId: shelf.id, slotKey: shelf.slotKey, photoCount });
+        await deleteShelf(shelf.id, { skipAudit: true });
       }
+    }
+    if (removed.length > 0) {
+      const photoCount = removed.reduce((n, r) => n + r.photoCount, 0);
+      await writeAuditLog('sync_prune_shelves', {
+        source: 'template',
+        shelfCount: removed.length,
+        photoCount,
+        shelves: removed,
+      });
     }
 
     await dedupeShelvesBySlotKey(slotKeys);
@@ -395,13 +467,17 @@ const CloudDB = (function () {
 
   async function resetAll() {
     const shelves = await getAllShelves();
+    const photoSnap = await photosCol().get();
+    await writeAuditLog('reset_all', {
+      shelfCount: shelves.length,
+      photoCount: photoSnap.size,
+    });
     for (const shelf of shelves) {
       shelf.checked = false;
       await updateShelf(shelf);
     }
-    const snap = await photosCol().get();
-    for (const doc of snap.docs) {
-      await deletePhoto(doc.id);
+    for (const doc of photoSnap.docs) {
+      await deletePhoto(doc.id, { skipAudit: true });
     }
   }
 
@@ -436,6 +512,7 @@ const CloudDB = (function () {
     addPhoto,
     updatePhoto,
     deletePhoto,
+    deletePhotos,
     getPhoto,
     getPhotoBlob,
     syncShelvesFromBoard,

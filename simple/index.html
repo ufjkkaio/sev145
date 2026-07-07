@@ -11,8 +11,8 @@
   <title>棚清掃</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="../icons/icon-192.png">
-  <link rel="stylesheet" href="../css/app.css?v=66">
-  <link rel="stylesheet" href="css/simple.css?v=66">
+  <link rel="stylesheet" href="../css/app.css?v=69">
+  <link rel="stylesheet" href="css/simple.css?v=69">
 </head>
 <body>
   <div id="app">
@@ -121,6 +121,9 @@
       <div class="dialog" role="dialog">
         <h3 class="dialog__title">すべてリセットしますか？</h3>
         <p class="dialog__message">すべての写真と清掃完了のチェックが削除されます。この操作は元に戻せません。</p>
+        <label class="auth-gate__label">確認のため合言葉を入力</label>
+        <input type="text" id="reset-pass-input" class="dialog__input" autocomplete="off" placeholder="合言葉">
+        <p id="reset-error" class="auth-gate__error" hidden></p>
         <div class="dialog__actions">
           <button type="button" id="btn-reset-cancel" class="btn btn--ghost">キャンセル</button>
           <button type="button" id="btn-reset-ok" class="btn btn--danger">リセット</button>
@@ -243,12 +246,12 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script src="../js/firebase-config.js?v=66"></script>
-  <script src="../js/firebase-boot.js?v=66"></script>
-  <script src="../js/cloud-auth.js?v=66"></script>
-  <script src="../js/cloud-db.js?v=66"></script>
-  <script src="../js/qr-render.js?v=66"></script>
-  <script src="js/db.js?v=66"></script>
-  <script src="js/app.js?v=66"></script>
+  <script src="../js/firebase-config.js?v=69"></script>
+  <script src="../js/firebase-boot.js?v=69"></script>
+  <script src="../js/cloud-auth.js?v=69"></script>
+  <script src="../js/cloud-db.js?v=69"></script>
+  <script src="../js/qr-render.js?v=69"></script>
+  <script src="js/db.js?v=69"></script>
+  <script src="js/app.js?v=69"></script>
 </body>
 </html>

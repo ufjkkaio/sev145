@@ -63,6 +63,8 @@
     btnDeleteShelfCancel: $('#btn-delete-shelf-cancel'),
     btnDeleteShelfOk: $('#btn-delete-shelf-ok'),
     resetDialog: $('#reset-dialog'),
+    resetPassInput: $('#reset-pass-input'),
+    resetError: $('#reset-error'),
     btnResetCancel: $('#btn-reset-cancel'),
     btnResetOk: $('#btn-reset-ok'),
     authGate: $('#auth-gate'),
@@ -155,11 +157,35 @@
       await bootApp();
     } catch (err) {
       console.error(err);
+      await signOutAfterBlockedStore();
       showAuthHub('login', err.message || '接続に失敗しました');
     }
   }
 
+  const FIXED_145_STORE_NUMBER = '528089';
+  const FIXED_145_LAYOUT_TYPES = new Set(['fixed-145']);
+
+  function assertSimpleCompatibleStore() {
+    const meta = CloudAuth.getCurrentStoreMeta();
+    const storeNumber = String(meta?.storeNumber || '');
+    const layoutType = meta?.layoutType || '';
+    if (storeNumber === FIXED_145_STORE_NUMBER || FIXED_145_LAYOUT_TYPES.has(layoutType)) {
+      throw new Error(
+        '145号店（528089）は「他店舗」画面では開けません。トップの145用URL（/sev145/）をご利用ください。',
+      );
+    }
+  }
+
+  async function signOutAfterBlockedStore() {
+    try {
+      await FirebaseBoot.auth.signOut();
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function bootApp() {
+    assertSimpleCompatibleStore();
     hideAuthHub();
     CloudDB.stopSync();
     CloudDB.setOnChange(() => {
@@ -255,6 +281,7 @@
         await CloudAuth.login(els.authLoginNumber.value, els.authLoginPass.value);
         await bootApp();
       } catch (err) {
+        await signOutAfterBlockedStore();
         showAuthError(err.message);
       }
     });
@@ -274,6 +301,7 @@
       try {
         await bootApp();
       } catch (err) {
+        await signOutAfterBlockedStore();
         showAuthError(err.message);
         showAuthPanel('home');
       }
@@ -290,6 +318,7 @@
         await CloudAuth.loginFromQr(text);
         await bootApp();
       } catch (err) {
+        await signOutAfterBlockedStore();
         showAuthError(err.message);
       }
     });
@@ -334,6 +363,7 @@
           await CloudAuth.switchStore(s.storeId);
           await bootApp();
         } catch (err) {
+          await signOutAfterBlockedStore();
           alert(err.message);
         }
       });
@@ -409,8 +439,17 @@
       state.pendingDeleteSlotKey = null;
     });
     els.btnDeleteShelfOk.addEventListener('click', confirmDeleteShelf);
-    els.btnReset.addEventListener('click', () => { els.resetDialog.hidden = false; });
-    els.btnResetCancel.addEventListener('click', () => { els.resetDialog.hidden = true; });
+    els.btnReset.addEventListener('click', () => {
+      if (els.resetPassInput) els.resetPassInput.value = '';
+      showResetError('');
+      els.resetDialog.hidden = false;
+      els.resetPassInput?.focus();
+    });
+    els.btnResetCancel.addEventListener('click', () => {
+      els.resetDialog.hidden = true;
+      if (els.resetPassInput) els.resetPassInput.value = '';
+      showResetError('');
+    });
     els.btnResetOk.addEventListener('click', handleReset);
     els.btnViewerClose.addEventListener('click', closePhotoViewer);
     els.btnViewerDelete.addEventListener('click', showDeleteConfirm);
@@ -1817,8 +1856,27 @@
     if (cb) cb(name);
   }
 
+  function showResetError(msg) {
+    if (!els.resetError) return;
+    if (!msg) {
+      els.resetError.hidden = true;
+      els.resetError.textContent = '';
+      return;
+    }
+    els.resetError.hidden = false;
+    els.resetError.textContent = msg;
+  }
+
   async function handleReset() {
+    try {
+      CloudAuth.verifyCurrentPassphrase(els.resetPassInput?.value || '');
+    } catch (err) {
+      showResetError(err.message);
+      return;
+    }
     els.resetDialog.hidden = true;
+    if (els.resetPassInput) els.resetPassInput.value = '';
+    showResetError('');
     await DB.resetAll();
     closeFolder();
     await refresh();
