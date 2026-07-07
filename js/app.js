@@ -68,10 +68,6 @@
     moveShelfDialogHint: $('#move-shelf-dialog-hint'),
     moveShelfList: $('#move-shelf-list'),
     btnMoveShelfCancel: $('#btn-move-shelf-cancel'),
-
-    btnDecorationOpen: $('#btn-decoration-open'),
-    decorationViewer: $('#decoration-viewer'),
-    btnDecorationClose: $('#btn-decoration-close'),
   };
 
   let state = {
@@ -249,7 +245,7 @@
 
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=70').catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=68').catch(() => {});
     }
   }
 
@@ -344,38 +340,6 @@
     els.moveShelfDialog.addEventListener('click', (e) => {
       if (e.target === els.moveShelfDialog) closeMoveShelfDialog();
     });
-
-    if (els.btnDecorationOpen) {
-      els.btnDecorationOpen.addEventListener('click', openDecorationViewer);
-    }
-    if (els.btnDecorationClose) {
-      els.btnDecorationClose.addEventListener('click', closeDecorationViewer);
-    }
-    if (els.decorationViewer) {
-      els.decorationViewer.addEventListener('click', (e) => {
-        if (e.target === els.decorationViewer) closeDecorationViewer();
-      });
-    }
-  }
-
-  function openDecorationViewer() {
-    if (!els.decorationViewer) return;
-    els.decorationViewer.hidden = false;
-    els.decorationViewer.removeAttribute('hidden');
-    document.body.style.overflow = 'hidden';
-  }
-
-  function closeDecorationViewer() {
-    if (!els.decorationViewer) return;
-    els.decorationViewer.hidden = true;
-    els.decorationViewer.setAttribute('hidden', '');
-    const folderOpen = els.folderOverlay && !els.folderOverlay.hidden;
-    const photoOpen = els.photoViewer
-      && !els.photoViewer.hidden
-      && !els.photoViewer.classList.contains('photo-viewer--closed');
-    if (!folderOpen && !photoOpen) {
-      document.body.style.overflow = '';
-    }
   }
 
   function toggleEditMode() {
