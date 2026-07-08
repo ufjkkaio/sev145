@@ -15,7 +15,7 @@
 </head>
 <body>
   <h1>店舗データ診断</h1>
-  <p>操作ログはアプリにはありません。このツールで Firestore / Storage の<strong>現在の状態</strong>を確認できます。</p>
+  <p>操作ログは <a href="audit-log.html">操作ログ viewer</a> で確認できます。このツールで Firestore / Storage の<strong>現在の状態</strong>を確認できます。</p>
 
   <label>店番号（6桁）</label>
   <input id="store-number" value="528089" inputmode="numeric" maxlength="6">
@@ -139,7 +139,7 @@
       lines.push(`Storage: stores / ${storeId} / photos /`);
       lines.push(`プロジェクト: tana-kanri-a275d`);
       lines.push('</pre>');
-      lines.push('<p>※ アプリ内に操作ログはありません。誰がいつ削除したかは Firebase 標準では記録されません（GCP の監査ログは Blaze プラン等が必要）。</p>');
+      lines.push('<p>※ 操作ログは <a href="audit-log.html">操作ログ viewer</a> で確認できます（v70以降の記録）。</p>');
 
       reportEl.innerHTML = lines.join('\n');
       reportEl.hidden = false;

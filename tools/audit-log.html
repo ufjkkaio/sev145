@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>操作ログ</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --card: #fff;
+      --border: #dde3ea;
+      --text: #1a1a1a;
+      --muted: #5f6b7a;
+      --accent: #1a5f2a;
+      --danger: #c62828;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+    h1 {
+      font-size: 1.35rem;
+      margin: 0 0 8px;
+    }
+    .lead {
+      color: var(--muted);
+      margin: 0 0 20px;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    input, button, select {
+      font-size: 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      width: 100%;
+    }
+    input { margin-bottom: 12px; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:active { opacity: 0.85; }
+    button.btn-ghost {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--border);
+      width: auto;
+      margin-top: 12px;
+    }
+    #status { margin: 12px 0 0; min-height: 1.4em; }
+    .ok { color: var(--accent); }
+    .warn { color: var(--danger); }
+    .store-meta {
+      display: grid;
+      gap: 4px;
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+    }
+    .store-meta strong { color: var(--text); }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .toolbar select { width: auto; min-width: 180px; margin: 0; }
+    .toolbar .count { color: var(--muted); font-size: 0.9rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .action {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .action--danger { background: #ffebee; color: #b71c1c; }
+    .action--sync { background: #fff8e1; color: #e65100; }
+    .action--info { background: #e8f5e9; color: #1b5e20; }
+    .details {
+      color: var(--muted);
+      font-size: 0.82rem;
+      word-break: break-word;
+    }
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 32px 12px;
+    }
+    @media (max-width: 640px) {
+      table, thead, tbody, th, td, tr { display: block; }
+      thead { display: none; }
+      tr {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin-bottom: 10px;
+        padding: 10px;
+        background: #fff;
+      }
+      td {
+        border: none;
+        padding: 4px 0;
+      }
+      td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-bottom: 2px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>操作ログ</h1>
+    <p class="lead">店番号と合言葉でログインし、その店舗の監査ログ（auditLog）を表示します。</p>
+
+    <div id="login-card" class="card">
+      <label for="store-number">店番号（6桁）</label>
+      <input id="store-number" value="528089" inputmode="numeric" maxlength="6" autocomplete="off">
+      <label for="store-pass">合言葉</label>
+      <input id="store-pass" type="password" autocomplete="off">
+      <button id="btn-login" type="button">ログインして表示</button>
+      <p id="status"></p>
+    </div>
+
+    <div id="report" hidden>
+      <div class="card">
+        <div class="store-meta" id="store-meta"></div>
+        <div class="toolbar">
+          <select id="filter-action" aria-label="操作の種類で絞り込み">
+            <option value="">すべての操作</option>
+          </select>
+          <span class="count" id="log-count"></span>
+        </div>
+        <div id="log-table-wrap"></div>
+        <button type="button" class="btn-ghost" id="btn-logout">ログアウト</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+  <script src="../js/firebase-boot.js"></script>
+  <script src="../js/cloud-auth.js"></script>
+  <script>
+    const ACTION_LABELS = {
+      reset_all: '全リセット',
+      delete_shelf: '棚削除',
+      delete_photo: '写真削除',
+      delete_photos_bulk: '写真一括削除',
+      sync_prune_shelves: '棚同期による削除',
+      sync_template_reset: 'テンプレートリセット',
+    };
+
+    const ACTION_CLASS = {
+      reset_all: 'action--danger',
+      delete_shelf: 'action--danger',
+      delete_photo: 'action--danger',
+      delete_photos_bulk: 'action--danger',
+      sync_prune_shelves: 'action--sync',
+      sync_template_reset: 'action--sync',
+    };
+
+    const statusEl = document.getElementById('status');
+    const reportEl = document.getElementById('report');
+    const loginCard = document.getElementById('login-card');
+    const filterEl = document.getElementById('filter-action');
+    const countEl = document.getElementById('log-count');
+    const tableWrap = document.getElementById('log-table-wrap');
+    const storeMetaEl = document.getElementById('store-meta');
+
+    let allLogs = [];
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function toMs(log) {
+      const at = log.at;
+      if (at && typeof at.toMillis === 'function') return at.toMillis();
+      if (at && typeof at.seconds === 'number') return at.seconds * 1000;
+      if (typeof at === 'number') return at;
+      return 0;
+    }
+
+    function formatTime(log) {
+      if (log.atText) return log.atText;
+      const ms = toMs(log);
+      if (!ms) return '—';
+      return new Date(ms).toLocaleString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function formatApp(app) {
+      if (!app) return '—';
+      if (app.includes('/simple/')) return '他店舗 (simple)';
+      if (app.includes('/trial/')) return '試用版 (trial)';
+      return '145号店';
+    }
+
+    function formatDetails(action, details) {
+      if (!details || typeof details !== 'object') return '—';
+      const parts = [];
+      if (details.count != null) parts.push(`${details.count}枚`);
+      if (details.photoCount != null) parts.push(`写真 ${details.photoCount}枚`);
+      if (details.shelfCount != null) parts.push(`棚 ${details.shelfCount}件`);
+      if (details.shelfId != null) parts.push(`棚ID ${details.shelfId}`);
+      if (details.slotKey) parts.push(`slot ${details.slotKey}`);
+      if (details.source) parts.push(`経路: ${details.source}`);
+      if (details.photoId) parts.push(`写真ID ${details.photoId}`);
+      if (action === 'sync_prune_shelves' && Array.isArray(details.shelves) && details.shelves.length > 0) {
+        const preview = details.shelves.slice(0, 3).map((s) => s.slotKey || s.shelfId).join(', ');
+        const rest = details.shelves.length > 3 ? ` 他${details.shelves.length - 3}件` : '';
+        parts.push(`削除棚: ${preview}${rest}`);
+      }
+      return parts.length > 0 ? parts.join(' / ') : JSON.stringify(details);
+    }
+
+    function renderLogs(logs) {
+      if (logs.length === 0) {
+        tableWrap.innerHTML = '<p class="empty">該当するログがありません。</p>';
+        countEl.textContent = '0件';
+        return;
+      }
+
+      countEl.textContent = `${logs.length}件`;
+      const rows = logs.map((log) => {
+        const label = ACTION_LABELS[log.action] || log.action || '不明';
+        const cls = ACTION_CLASS[log.action] || 'action--info';
+        return `<tr>
+          <td data-label="日時">${esc(formatTime(log))}</td>
+          <td data-label="操作"><span class="action ${cls}">${esc(label)}</span></td>
+          <td data-label="詳細"><span class="details">${esc(formatDetails(log.action, log.details))}</span></td>
+          <td data-label="画面">${esc(formatApp(log.app))}</td>
+        </tr>`;
+      }).join('');
+
+      tableWrap.innerHTML = `<table>
+        <thead>
+          <tr>
+            <th>日時</th>
+            <th>操作</th>
+            <th>詳細</th>
+            <th>画面</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+
+    function populateFilter(logs) {
+      const actions = [...new Set(logs.map((l) => l.action).filter(Boolean))].sort();
+      filterEl.innerHTML = '<option value="">すべての操作</option>';
+      for (const action of actions) {
+        const opt = document.createElement('option');
+        opt.value = action;
+        opt.textContent = ACTION_LABELS[action] || action;
+        filterEl.appendChild(opt);
+      }
+    }
+
+    function applyFilter() {
+      const value = filterEl.value;
+      const filtered = value ? allLogs.filter((l) => l.action === value) : allLogs;
+      renderLogs(filtered);
+    }
+
+    async function loadLogs() {
+      statusEl.textContent = 'ログを読み込み中…';
+      const storeId = CloudAuth.getCurrentStoreId();
+      const meta = CloudAuth.getCurrentStoreMeta();
+      const snap = await FirebaseBoot.db.collection('stores').doc(storeId).collection('auditLog').get();
+
+      allLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      allLogs.sort((a, b) => toMs(b) - toMs(a));
+
+      storeMetaEl.innerHTML = [
+        `<div><strong>店舗名:</strong> ${esc(meta?.displayName || '—')}</div>`,
+        `<div><strong>店番号:</strong> ${esc(meta?.storeNumber || '—')}</div>`,
+        `<div><strong>店舗ID:</strong> ${esc(storeId)}</div>`,
+      ].join('');
+
+      populateFilter(allLogs);
+      applyFilter();
+
+      loginCard.hidden = true;
+      reportEl.hidden = false;
+      statusEl.innerHTML = '<span class="ok">読み込み完了</span>';
+    }
+
+    async function logout() {
+      await FirebaseBoot.auth.signOut();
+      allLogs = [];
+      reportEl.hidden = true;
+      loginCard.hidden = false;
+      statusEl.textContent = '';
+      document.getElementById('store-pass').value = '';
+    }
+
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      statusEl.textContent = 'ログイン中…';
+      reportEl.hidden = true;
+      try {
+        await CloudAuth.login(
+          document.getElementById('store-number').value.trim(),
+          document.getElementById('store-pass').value,
+        );
+        await loadLogs();
+      } catch (err) {
+        statusEl.innerHTML = `<span class="warn">エラー: ${esc(err.message || err)}</span>`;
+      }
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', logout);
+    filterEl.addEventListener('change', applyFilter);
+  </script>
+</body>
+</html>
